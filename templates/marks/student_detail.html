@@ -1,0 +1,194 @@
+{% extends 'marks/base.html' %}
+
+{% block title %}{{ student.full_name }} - JNV Ernakulam{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="text-gradient mb-0">{{ student.full_name }}</h1>
+        <p class="text-muted mb-0">{{ student.admission_number }} | Roll: {{ student.roll_number }} | {{ student.student_class }}</p>
+    </div>
+    <div>
+        <a href="{% url 'marks:student_list' %}" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-2"></i>Back
+        </a>
+        <a href="{% url 'marks:student_update' student.id %}" class="btn btn-outline-primary">
+            <i class="fas fa-edit me-2"></i>Edit
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body text-center">
+                {% if student.photo %}
+                <img src="{{ student.photo.url }}" alt="{{ student.full_name }}" class="rounded-circle mb-3" style="width: 150px; height: 150px; object-fit: cover;">
+                {% else %}
+                <div class="rounded-circle bg-primary d-inline-flex align-items-center justify-content-center mb-3" style="width: 150px; height: 150px;">
+                    <i class="fas fa-user-graduate fa-4x text-white"></i>
+                </div>
+                {% endif %}
+                <h4>{{ student.full_name }}</h4>
+                <p class="text-muted">{{ student.admission_number }} | Roll: {{ student.roll_number }}</p>
+                <span class="badge bg-primary">{{ student.student_class }}</span>
+                
+                <hr class="my-3">
+                
+                <div class="text-start">
+                    <p class="mb-1"><strong>Gender:</strong> {% if student.gender == 'M' %}Male{% elif student.gender == 'F' %}Female{% else %}Other{% endif %}</p>
+                    <p class="mb-1"><strong>DOB:</strong> {{ student.date_of_birth|date:"d M Y" }}</p>
+                    <p class="mb-1"><strong>Father:</strong> {{ student.father_name }}</p>
+                    <p class="mb-1"><strong>Mother:</strong> {{ student.mother_name }}</p>
+                    <p class="mb-1"><strong>Phone:</strong> {{ student.phone }}</p>
+                    <p class="mb-1"><strong>Email:</strong> {{ student.email|default:"-" }}</p>
+                    <p class="mb-1"><strong>Address:</strong> {{ student.address|truncatechars:50 }}</p>
+                    <p class="mb-1"><strong>Admission Date:</strong> {{ student.admission_date|date:"d M Y" }}</p>
+                    <p class="mb-0"><strong>Status:</strong> {% if student.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-secondary">Inactive</span>{% endif %}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Exam Results</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if results %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Exam</th>
+                                <th>Type</th>
+                                <th>Date</th>
+                                <th>Total</th>
+                                <th>%</th>
+                                <th>Grade</th>
+                                <th>Rank</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for result in results %}
+                            <tr>
+                                <td><strong>{{ result.exam.name }}</strong></td>
+                                <td><span class="badge bg-primary">{{ result.exam.get_exam_type_display }}</span></td>
+                                <td>{{ result.exam.start_date|date:"d M Y" }} - {{ result.exam.end_date|date:"d M Y" }}</td>
+                                <td>{{ result.total_marks }} / {{ result.max_total_marks }}</td>
+                                <td>
+                                    <strong class="text-{% if result.percentage >= 60 %}success{% elif result.percentage >= 33 %}warning{% else %}danger{% endif %}">
+                                        {{ result.percentage }}%
+                                    </strong>
+                                </td>
+                                <td><span class="badge bg-primary">{{ result.grade }}</span></td>
+                                <td>
+                                    {% if result.rank == 1 %}
+                                    <i class="fas fa-trophy text-warning"></i> 1<sup>st</sup>
+                                    {% elif result.rank == 2 %}
+                                    <i class="fas fa-medal text-secondary"></i> 2<sup>nd</sup>
+                                    {% elif result.rank == 3 %}
+                                    <i class="fas fa-medal" style="color: #cd7f32;"></i> 3<sup>rd</sup>
+                                    {% else %}
+                                    {{ result.rank }}
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if result.is_pass %}
+                                    <span class="badge bg-success">PASS</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">FAIL</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <a href="{% url 'marks:report_card' student.id result.exam.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-file-alt me-1"></i>Report Card
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-trophy fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No exam results available for this student.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Subject-wise Performance (Latest Exam)</h5>
+            </div>
+            <div class="card-body">
+                {% if marks %}
+                {% regroup marks by exam as marks_by_exam %}
+                {% with latest_exam_marks=marks_by_exam.0 %}
+                <h6 class="text-muted mb-3">{{ latest_exam_marks.grouper.name }} ({{ latest_exam_marks.grouper.get_exam_type_display }})</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th class="text-center">Max</th>
+                                <th class="text-center">Obtained</th>
+                                <th class="text-center">%</th>
+                                <th class="text-center">Grade</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for mark in latest_exam_marks.list %}
+                            <tr>
+                                <td><strong>{{ mark.subject.name }}</strong></td>
+                                <td class="text-center">{{ mark.subject.max_marks }}</td>
+                                <td class="text-center">
+                                    {% if mark.is_absent %}
+                                    <span class="text-muted">AB</span>
+                                    {% else %}
+                                    <strong>{{ mark.marks_obtained }}</strong>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if mark.is_absent %}
+                                    <span class="text-muted">-</span>
+                                    {% else %}
+                                    <span class="{% if mark.is_pass %}text-success{% else %}text-danger{% endif %} fw-bold">{{ mark.percentage }}%</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if mark.is_absent %}
+                                    <span class="text-muted">-</span>
+                                    {% else %}
+                                    <span class="badge bg-primary">{{ mark.grade }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    {% if mark.is_absent %}
+                                    <span class="badge bg-secondary">ABSENT</span>
+                                    {% elif mark.is_pass %}
+                                    <span class="badge bg-success">PASS</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">FAIL</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endwith %}
+                {% else %}
+                <p class="text-muted text-center py-3">No marks data available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

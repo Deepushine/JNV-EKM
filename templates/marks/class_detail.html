@@ -1,0 +1,223 @@
+{% extends 'marks/base.html' %}
+
+{% block title %}{{ class_obj }} - JNV Ernakulam{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="text-gradient mb-0">{{ class_obj }}</h1>
+        <p class="text-muted mb-0">{{ class_obj.academic_year.name }} | {{ class_obj.students.filter.is_active.count|default:class_obj.students.count }} Students</p>
+    </div>
+    <div>
+        <a href="{% url 'marks:class_list' %}" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-2"></i>Back
+        </a>
+        <a href="{% url 'marks:class_update' class_obj.id %}" class="btn btn-outline-primary">
+            <i class="fas fa-edit me-2"></i>Edit
+        </a>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card primary">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Total Students</p>
+                    <h2 class="mb-0">{{ class_obj.students.filter.is_active.count|default:class_obj.students.count }}</h2>
+                </div>
+                <div class="stat-icon bg-blue-100 text-primary">
+                    <i class="fas fa-user-graduate"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card success">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Subjects</p>
+                    <h2 class="mb-0">{{ class_obj.subjects.count }}</h2>
+                </div>
+                <div class="stat-icon bg-green-100 text-success">
+                    <i class="fas fa-book"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card warning">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Exams</p>
+                    <h2 class="mb-0">{{ class_obj.exams.count }}</h2>
+                </div>
+                <div class="stat-icon bg-yellow-100 text-warning">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card info">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Class Teacher</p>
+                    <h2 class="mb-0">{% if class_obj.class_teacher %}{{ class_obj.class_teacher.full_name }}{% else %}-{% endif %}</h2>
+                </div>
+                <div class="stat-icon bg-cyan-100 text-info">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Students</h5>
+                <a href="{% url 'marks:student_create' %}?class={{ class_obj.id }}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus me-1"></i>Add Student
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if students %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Roll No</th>
+                                <th>Admission No</th>
+                                <th>Name</th>
+                                <th>Gender</th>
+                                <th>DOB</th>
+                                <th>Phone</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students %}
+                            <tr>
+                                <td><strong>{{ student.roll_number }}</strong></td>
+                                <td>{{ student.admission_number }}</td>
+                                <td>{{ student.full_name }}</td>
+                                <td>
+                                    {% if student.gender == 'M' %}
+                                    <span class="badge bg-primary">M</span>
+                                    {% elif student.gender == 'F' %}
+                                    <span class="badge bg-danger">F</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">O</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ student.date_of_birth|date:"d M Y" }}</td>
+                                <td>{{ student.phone }}</td>
+                                <td>
+                                    {% if student.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="{% url 'marks:student_detail' student.id %}" class="btn btn-outline-primary" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{% url 'marks:student_update' student.id %}" class="btn btn-outline-secondary" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-user-graduate fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No students in this class yet.</p>
+                    <a href="{% url 'marks:student_create' %}?class={{ class_obj.id }}" class="btn btn-primary">Add First Student</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Subjects</h5>
+            </div>
+            <div class="card-body">
+                {% if subjects %}
+                <ul class="list-group list-group-flush">
+                    {% for subject in subjects %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ subject.name }}</strong> ({{ subject.code }})
+                            <br><small class="text-muted">{{ subject.get_subject_type_display }} | Max: {{ subject.max_marks }} | Pass: {{ subject.pass_marks }}</small>
+                        </div>
+                        <span class="badge bg-primary">{{ subject.teachers.count }} Teacher(s)</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center py-3">No subjects assigned</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Exams</h5>
+            </div>
+            <div class="card-body">
+                {% if class_obj.exams.all %}
+                <ul class="list-group list-group-flush">
+                    {% for exam in class_obj.exams.all|slice:":5" %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ exam.name }}</strong>
+                            <br><small class="text-muted">{{ exam.get_exam_type_display }} | {{ exam.start_date|date:"d M Y" }} - {{ exam.end_date|date:"d M Y" }}</small>
+                        </div>
+                        <span class="badge {% if exam.is_published %}bg-success{% else %}bg-warning{% endif %}">
+                            {% if exam.is_published %}Published{% else %}Draft{% endif %}
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center py-3">No exams scheduled</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'marks:student_create' %}?class={{ class_obj.id }}" class="btn btn-outline-primary">
+                        <i class="fas fa-user-plus me-2"></i>Add Student
+                    </a>
+                    <a href="#" class="btn btn-outline-success">
+                        <i class="fas fa-file-import me-2"></i>Import Students (Excel)
+                    </a>
+                    <a href="#" class="btn btn-outline-info">
+                        <i class="fas fa-print me-2"></i>Print Class List
+                    </a>
+                    <a href="#" class="btn btn-outline-secondary">
+                        <i class="fas fa-envelope me-2"></i>Email Parents
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,240 @@
+{% extends 'marks/base.html' %}
+
+{% block title %}Subject Analysis: {{ subject.name }} - JNV Ernakulam{% endblock %}
+
+{% block extra_css %}
+<style>
+.analysis-card {
+    transition: all 0.3s ease;
+}
+.analysis-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="text-gradient mb-0">Subject Analysis</h1>
+        <p class="text-muted mb-0">{{ subject.name }} ({{ subject.code }}) | {{ subject.get_subject_type_display }}</p>
+    </div>
+    <div>
+        <a href="{% url 'marks:subject_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Subjects
+        </a>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card primary analysis-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Max Marks</p>
+                    <h2 class="mb-0">{{ subject.max_marks }}</h2>
+                </div>
+                <div class="stat-icon bg-blue-100 text-primary">
+                    <i class="fas fa-star"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card success analysis-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Pass Marks</p>
+                    <h2 class="mb-0">{{ subject.pass_marks }}</h2>
+                </div>
+                <div class="stat-icon bg-green-100 text-success">
+                    <i class="fas fa-check"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card warning analysis-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Classes</p>
+                    <h2 class="mb-0">{{ subject.classes.count }}</h2>
+                </div>
+                <div class="stat-icon bg-yellow-100 text-warning">
+                    <i class="fas fa-chalkboard"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card info analysis-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Teachers</p>
+                    <h2 class="mb-0">{{ subject.teachers.count }}</h2>
+                </div>
+                <div class="stat-icon bg-cyan-100 text-info">
+                    <i class="fas fa-chalkboard-teacher"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Performance Across Exams</h5>
+            </div>
+            <div class="card-body">
+                {% if exam_analysis %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Exam</th>
+                                <th>Type</th>
+                                <th class="text-center">Total</th>
+                                <th class="text-center">Present</th>
+                                <th class="text-center">Absent</th>
+                                <th class="text-center">Passed</th>
+                                <th class="text-center">Failed</th>
+                                <th class="text-center">Pass %</th>
+                                <th class="text-center">Avg Marks</th>
+                                <th class="text-center">Max</th>
+                                <th class="text-center">Min</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for analysis in exam_analysis %}
+                            <tr>
+                                <td>
+                                    <strong>{{ analysis.exam.name }}</strong>
+                                    <br><small class="text-muted">{{ analysis.exam.start_date|date:"d M Y" }}</small>
+                                </td>
+                                <td><span class="badge bg-primary">{{ analysis.exam.get_exam_type_display }}</span></td>
+                                <td class="text-center">{{ analysis.total_students }}</td>
+                                <td class="text-center">{{ analysis.present_students }}</td>
+                                <td class="text-center">
+                                    {% if analysis.absent_students > 0 %}
+                                    <span class="text-danger">{{ analysis.absent_students }}</span>
+                                    {% else %}
+                                    <span class="text-success">0</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center text-success fw-bold">{{ analysis.passed }}</td>
+                                <td class="text-center">
+                                    {% if analysis.failed > 0 %}
+                                    <span class="text-danger fw-bold">{{ analysis.failed }}</span>
+                                    {% else %}
+                                    <span class="text-success">0</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-center">
+                                    <span class="badge {% if analysis.pass_percentage >= 80 %}bg-success{% elif analysis.pass_percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %} fs-6">
+                                        {{ analysis.pass_percentage }}%
+                                    </span>
+                                </td>
+                                <td class="text-center">{{ analysis.avg_marks }}/{{ subject.max_marks }}</td>
+                                <td class="text-center">{{ analysis.max_marks|default:"-" }}</td>
+                                <td class="text-center">{{ analysis.min_marks|default:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No exam data available for this subject.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Assigned Teachers</h5>
+            </div>
+            <div class="card-body">
+                {% if subject.teachers.all %}
+                <ul class="list-group list-group-flush">
+                    {% for teacher in subject.teachers.all %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ teacher.full_name }}</strong>
+                            <br><small class="text-muted">{{ teacher.employee_id }} | {{ teacher.email }}</small>
+                        </div>
+                        {% if teacher.is_active %}
+                        <span class="badge bg-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Inactive</span>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center py-3">No teachers assigned</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chalkboard me-2"></i>Classes</h5>
+            </div>
+            <div class="card-body">
+                {% if subject.classes.all %}
+                <ul class="list-group list-group-flush">
+                    {% for cls in subject.classes.all %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ cls }}</strong>
+                            <br><small class="text-muted">{{ cls.academic_year.name }}</small>
+                        </div>
+                        <span class="badge bg-primary">{{ cls.students.filter.is_active.count|default:cls.students.count }} students</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-center py-3">No classes assigned</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Key Insights</h5>
+            </div>
+            <div class="card-body">
+                {% if exam_analysis %}
+                <ul class="list-unstyled mb-0">
+                    <li class="mb-3 p-3 bg-light rounded">
+                        <strong>Highest Pass Rate:</strong>
+                        <br>{{ exam_analysis|highest_pass }} ({{ exam_analysis|highest_pass_val }}%)
+                    </li>
+                    <li class="mb-3 p-3 bg-light rounded">
+                        <strong>Lowest Pass Rate:</strong>
+                        <br>{{ exam_analysis|lowest_pass }} ({{ exam_analysis|lowest_pass_val }}%)
+                    </li>
+                    <li class="mb-3 p-3 bg-light rounded">
+                        <strong>Highest Average:</strong>
+                        <br>{{ exam_analysis|highest_avg }} ({{ exam_analysis|highest_avg_val }}/{{ subject.max_marks }})
+                    </li>
+                    <li class="p-3 bg-light rounded">
+                        <strong>Overall Trend:</strong>
+                        <br>{{ exam_analysis|subject_trend }}
+                    </li>
+                </ul>
+                {% else %}
+                <p class="text-muted mb-0">No data available for insights</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends 'marks/base.html' %}
+
+{% block title %}Subjects - JNV Ernakulam{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="text-gradient mb-0">Subjects</h1>
+        <p class="text-muted mb-0">Manage subjects and their configurations</p>
+    </div>
+    <div>
+        <a href="{% url 'marks:subject_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Add Subject
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        {% if object_list %}
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Code</th>
+                        <th>Type</th>
+                        <th>Max Marks</th>
+                        <th>Pass Marks</th>
+                        <th>Classes</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for subject in object_list %}
+                    <tr>
+                        <td><strong>{{ subject.name }}</strong></td>
+                        <td>{{ subject.code }}</td>
+                        <td><span class="badge bg-primary">{{ subject.get_subject_type_display }}</span></td>
+                        <td>{{ subject.max_marks }}</td>
+                        <td>{{ subject.pass_marks }}</td>
+                        <td>
+                            {% for cls in subject.classes.all|slice:":3" %}
+                            <span class="badge bg-light text-dark me-1">{{ cls }}</span>
+                            {% endfor %}
+                            {% if subject.classes.count > 3 %}
+                            <span class="text-muted">+{{ subject.classes.count|add:"-3" }} more</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                <a href="{% url 'marks:subject_update' subject.id %}" class="btn btn-outline-secondary" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'marks:subject_analysis' subject.id %}" class="btn btn-outline-info" title="Analysis">
+                                    <i class="fas fa-chart-bar"></i>
+                                </a>
+                                <a href="{% url 'marks:subject_delete' subject.id %}" class="btn btn-outline-danger" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if is_paginated %}
+        <nav class="p-3" aria-label="Pagination">
+            <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                <li class="page-item"><a class="page-link" href="?page=1">First</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+                {% endif %}
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
+                {% if page_obj.has_next %}
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+                <li class="page-item"><a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-book fa-3x text-muted mb-3"></i>
+            <p class="text-muted">No subjects found.</p>
+            <a href="{% url 'marks:subject_create' %}" class="btn btn-primary">Add Subject</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

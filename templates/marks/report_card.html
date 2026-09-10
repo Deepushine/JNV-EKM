@@ -1,0 +1,310 @@
+{% extends 'marks/base.html' %}
+
+{% block title %}Report Card: {{ student.full_name }} - {{ exam.name }} - JNV Ernakulam{% endblock %}
+
+{% block extra_css %}
+<style>
+@media print {
+    .no-print { display: none !important; }
+    .report-card { box-shadow: none; max-width: 100%; margin: 0; padding: 1rem; }
+    body { background: white; }
+}
+.report-card {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    background: white;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+}
+.report-card-header {
+    text-align: center;
+    border-bottom: 3px double var(--primary-color);
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.report-card-header h1 {
+    color: var(--primary-color);
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+.report-card-header h2 {
+    color: var(--secondary-color);
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+.report-card-header .school-info {
+    color: #64748b;
+    font-size: 0.875rem;
+}
+.student-info {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+.student-info .field {
+    display: flex;
+    flex-direction: column;
+}
+.student-info .label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+}
+.student-info .value {
+    font-weight: 500;
+}
+.marks-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5rem;
+}
+.marks-table th,
+.marks-table td {
+    padding: 0.75rem;
+    border: 1px solid #e2e8f0;
+    text-align: center;
+}
+.marks-table th {
+    background: #f8fafc;
+    font-weight: 600;
+    font-size: 0.8125rem;
+}
+.marks-table td {
+    font-size: 0.875rem;
+}
+.marks-table .subject-name {
+    text-align: left;
+}
+.marks-table .absent { color: #94a3b8; }
+.marks-table .fail { color: var(--danger-color); font-weight: 600; }
+.marks-table .pass { color: var(--success-color); }
+.result-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+.result-card {
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    text-align: center;
+}
+.result-card .value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+}
+.result-card .label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+}
+.grade-card {
+    padding: 1.5rem;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    border-radius: 12px;
+    color: white;
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+.grade-card .grade {
+    font-size: 3rem;
+    font-weight: 700;
+}
+.grade-card .grade-label {
+    font-size: 1rem;
+    opacity: 0.9;
+}
+.signature-section {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    margin-top: 2rem;
+}
+.signature-box {
+    text-align: center;
+}
+.signature-box .line {
+    border-bottom: 1px solid #334155;
+    margin-bottom: 0.5rem;
+    height: 40px;
+}
+.signature-box .title {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+.footer-info {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+    color: #64748b;
+    font-size: 0.75rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print mb-4 d-flex justify-content-between align-items-center">
+    <a href="{% url 'marks:student_detail' student.id %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Student
+    </a>
+    <button onclick="window.print()" class="btn btn-primary">
+        <i class="fas fa-print me-2"></i>Print Report Card
+    </button>
+</div>
+
+<div class="report-card">
+    <div class="report-card-header">
+        <h1>JAWAHAR NAVODAYA VIDYALAYA</h1>
+        <h2>ERNAKULAM, KERALA</h2>
+        <div class="school-info">
+            <i class="fas fa-map-marker-alt me-1"></i>Ministry of Education, Govt. of India | CBSE Affiliation No: 940001
+        </div>
+        <div class="mt-2">
+            <span class="badge bg-primary fs-6">{{ exam.name }}</span>
+            <span class="badge bg-secondary ms-2">{{ exam.get_exam_type_display }}</span>
+        </div>
+    </div>
+
+    <div class="student-info">
+        <div class="field">
+            <span class="label">Name</span>
+            <span class="value">{{ student.full_name }}</span>
+        </div>
+        <div class="field">
+            <span class="label">Admission No</span>
+            <span class="value">{{ student.admission_number }}</span>
+        </div>
+        <div class="field">
+            <span class="label">Roll No</span>
+            <span class="value">{{ student.roll_number }}</span>
+        </div>
+        <div class="field">
+            <span class="label">Class</span>
+            <span class="value">{{ student.student_class }}</span>
+        </div>
+        <div class="field">
+            <span class="label">Father's Name</span>
+            <span class="value">{{ student.father_name }}</span>
+        </div>
+        <div class="field">
+            <span class="label">Mother's Name</span>
+            <span class="value">{{ student.mother_name }}</span>
+        </div>
+        <div class="field">
+            <span class="label">DOB</span>
+            <span class="value">{{ student.date_of_birth|date:"d M Y" }}</span>
+        </div>
+        <div class="field">
+            <span class="label">Exam</span>
+            <span class="value">{{ exam.name }}</span>
+        </div>
+    </div>
+
+    <table class="marks-table">
+        <thead>
+            <tr>
+                <th style="width: 5%">#</th>
+                <th style="width: 30%" class="subject-name">Subject</th>
+                <th style="width: 12%">Max Marks</th>
+                <th style="width: 12%">Marks Obtained</th>
+                <th style="width: 12%">Percentage</th>
+                <th style="width: 10%">Grade</th>
+                <th style="width: 10%">Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for mark in marks %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td class="subject-name"><strong>{{ mark.subject.name }}</strong></td>
+                <td>{{ mark.subject.max_marks }}</td>
+                <td>
+                    {% if mark.is_absent %}
+                    <span class="absent">ABSENT</span>
+                    {% else %}
+                    <strong>{{ mark.marks_obtained }}</strong>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if mark.is_absent %}
+                    <span class="absent">-</span>
+                    {% else %}
+                    <span class="{% if mark.is_pass %}pass{% else %}fail{% endif %}">{{ mark.percentage }}%</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if mark.is_absent %}
+                    <span class="absent">-</span>
+                    {% else %}
+                    <span class="badge bg-primary">{{ mark.grade }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if mark.is_absent %}
+                    <span class="badge bg-secondary">ABSENT</span>
+                    {% elif mark.is_pass %}
+                    <span class="badge bg-success">PASS</span>
+                    {% else %}
+                    <span class="badge bg-danger">FAIL</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="grade-card">
+        <div class="grade">{{ result.grade }}</div>
+        <div class="grade-label">Overall Grade</div>
+    </div>
+
+    <div class="result-summary">
+        <div class="result-card">
+            <div class="value">{{ result.total_marks }}</div>
+            <div class="label">Total Marks Obtained</div>
+        </div>
+        <div class="result-card">
+            <div class="value">{{ result.max_total_marks }}</div>
+            <div class="label">Maximum Marks</div>
+        </div>
+        <div class="result-card">
+            <div class="value">{{ result.percentage }}%</div>
+            <div class="label">Percentage</div>
+        </div>
+        <div class="result-card">
+            <div class="value">{{ result.rank }}{% if result.rank == 1 %}<sup>st</sup>{% elif result.rank == 2 %}<sup>nd</sup>{% elif result.rank == 3 %}<sup>rd</sup>{% else %}<sup>th</sup>{% endif %}</div>
+            <div class="label">Class Rank</div>
+        </div>
+    </div>
+
+    <div class="signature-section">
+        <div class="signature-box">
+            <div class="line"></div>
+            <div class="title">Class Teacher</div>
+        </div>
+        <div class="signature-box">
+            <div class="line"></div>
+            <div class="title">Vice Principal</div>
+        </div>
+        <div class="signature-box">
+            <div class="line"></div>
+            <div class="title">Principal</div>
+        </div>
+    </div>
+
+    <div class="footer-info">
+        <p class="mb-1"><strong>JAWAHAR NAVODAYA VIDYALAYA, ERNAKULAM</strong></p>
+        <p class="mb-1">This is a computer-generated report card. No signature required.</p>
+        <p class="mb-0">Generated on {{ timezone.now|date:"d M Y H:i" }}</p>
+    </div>
+</div>
+{% endblock %}

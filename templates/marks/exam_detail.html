@@ -1,0 +1,172 @@
+{% extends 'marks/base.html' %}
+
+{% block title %}{{ exam.name }} - JNV Ernakulam{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="text-gradient mb-0">{{ exam.name }}</h1>
+        <p class="text-muted mb-0">{{ exam.get_exam_type_display }} | {{ exam.academic_year.name }}</p>
+    </div>
+    <div>
+        <a href="{% url 'marks:exam_list' %}" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-2"></i>Back
+        </a>
+        {% if not exam.is_published %}
+        <a href="{% url 'marks:calculate_results' exam.id %}" class="btn btn-success">
+            <i class="fas fa-calculator me-2"></i>Calculate Results
+        </a>
+        {% endif %}
+        <a href="{% url 'marks:exam_update' exam.id %}" class="btn btn-outline-primary ms-2">
+            <i class="fas fa-edit me-2"></i>Edit
+        </a>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card primary">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Exam Type</p>
+                    <h5 class="mb-0">{{ exam.get_exam_type_display }}</h5>
+                </div>
+                <div class="stat-icon bg-blue-100 text-primary">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card success">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Date Range</p>
+                    <h5 class="mb-0">{{ exam.start_date|date:"d M Y" }} - {{ exam.end_date|date:"d M Y" }}</h5>
+                </div>
+                <div class="stat-icon bg-green-100 text-success">
+                    <i class="fas fa-calendar"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card warning">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Classes</p>
+                    <h5 class="mb-0">{{ exam.classes.count }}</h5>
+                </div>
+                <div class="stat-icon bg-yellow-100 text-warning">
+                    <i class="fas fa-chalkboard"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card {% if exam.is_published %}success{% else %}danger{% endif %}">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="text-muted mb-1 small">Status</p>
+                    <h5 class="mb-0">{% if exam.is_published %}Published{% else %}Draft{% endif %}</h5>
+                </div>
+                <div class="stat-icon bg-{% if exam.is_published %}green-100 text-success{% else %}red-100 text-danger{% endif %}">
+                    <i class="fas {% if exam.is_published %}fa-check-circle{% else %}fa-clock{% endif %}"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Classes & Marks Entry</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if classes %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Class</th>
+                                <th>Students</th>
+                                <th>Subjects</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cls in classes %}
+                            <tr>
+                                <td><strong>{{ cls }}</strong></td>
+                                <td>{{ cls.students.filter.is_active.count|default:cls.students.count }}</td>
+                                <td>{{ cls.subjects.count }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'marks:marks_entry' exam.id cls.id %}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-edit me-1"></i>Enter Marks
+                                    </a>
+                                    {% if exam.is_published %}
+                                    <a href="{% url 'marks:result_sheet' exam.id cls.id %}" class="btn btn-sm btn-success ms-1">
+                                        <i class="fas fa-list me-1"></i>View Results
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-chalkboard fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No classes assigned to this exam.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    {% if not exam.is_published %}
+                    <a href="{% url 'marks:calculate_results' exam.id %}" class="btn btn-success">
+                        <i class="fas fa-calculator me-2"></i>Calculate & Publish Results
+                    </a>
+                    {% endif %}
+                    <a href="#" class="btn btn-outline-primary">
+                        <i class="fas fa-download me-2"></i>Export All Results (Excel)
+                    </a>
+                    <a href="#" class="btn btn-outline-info">
+                        <i class="fas fa-print me-2"></i>Print Result Sheets
+                    </a>
+                    <a href="#" class="btn btn-outline-secondary">
+                        <i class="fas fa-envelope me-2"></i>Email Results to Parents
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">Exam Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Weightage</dt>
+                    <dd class="col-sm-8">{{ exam.weightage }}%</dd>
+                    <dt class="col-sm-4">Created</dt>
+                    <dd class="col-sm-8">{{ exam.created_at|date:"d M Y H:i" }}</dd>
+                    <dt class="col-sm-4">Updated</dt>
+                    <dd class="col-sm-8">{{ exam.updated_at|date:"d M Y H:i" }}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
