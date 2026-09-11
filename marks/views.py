@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Sum, Avg, Count, Q, F
+from django.db.models import Sum, Avg, Count, Q, F, Max, Min
 from django.http import JsonResponse, HttpResponse
 from django.core.paginator import Paginator
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
@@ -12,11 +12,206 @@ import csv
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from io import BytesIO
+from datetime import date
 
 from .models import (
     AcademicYear, Class, Subject, Teacher, Student,
-    Exam, Marks, Result
+    Exam, Marks, Result, Attendance, Achievement, StudyMaterial,
+    Assignment, AssignmentSubmission, DisciplinaryAction, PerformanceShare
 )
+
+
+def home(request):
+    return render(request, 'marks/home.html')
+
+
+def _teacher_for(request):
+    return getattr(request.user, 'teacher_profile', None) or getattr(request.user, 'teacher', None)
+
+
+def _student_for(request):
+    return getattr(request.user, 'student_profile', None)
+
+
+def _parent_for(request):
+    return getattr(request.user, 'parent_profile', None)
+
+
+@login_required
+def portal_dashboard(request):
+    teacher = _teacher_for(request)
+    student = _student_for(request)
+    parent = _parent_for(request)
+
+    if teacher:
+        classes = Class.objects.filter(class_teacher=teacher).prefetch_related('students')
+        assignments = Assignment.objects.filter(teacher=teacher).select_related('student_class', 'subject')[:6]
+        materials = StudyMaterial.objects.filter(uploaded_by=teacher)[:6]
+        return render(request, 'marks/portal_dashboard.html', {
+            'role': 'teacher', 'teacher': teacher, 'classes': classes,
+            'assignments': assignments, 'materials': materials,
+            'student_count': Student.objects.filter(student_class__class_teacher=teacher, is_active=True).count(),
+            'pending_submissions': AssignmentSubmission.objects.filter(assignment__teacher=teacher, status='submitted').count(),
+        })
+
+    if student:
+        results = Result.objects.filter(student=student, exam__is_published=True).select_related('exam')
+        attendance = student.attendance_records.all()
+        assignments = Assignment.objects.filter(student_class=student.student_class, is_published=True).select_related('subject')[:8]
+        submissions = {submission.assignment_id: submission for submission in student.assignment_submissions.all()}
+        materials = StudyMaterial.objects.filter(student_class=student.student_class, is_published=True).select_related('subject')[:8]
+        return render(request, 'marks/portal_dashboard.html', {
+            'role': 'student', 'student': student, 'results': results,
+            'attendance': attendance, 'attendance_total': attendance.count(),
+            'attendance_present': attendance.filter(status__in=['present', 'late']).count(),
+            'assignments': assignments, 'submissions': submissions, 'materials': materials,
+            'achievements': student.achievements.all()[:6],
+            'discipline': student.disciplinary_actions.filter(parent_visible=True)[:6],
+        })
+
+    if parent:
+        students = parent.students.filter(is_active=True).select_related('student_class')
+        selected_student = get_object_or_404(students, id=request.GET.get('student')) if request.GET.get('student') else students.first()
+        context = {'role': 'parent', 'parent': parent, 'students': students, 'student': selected_student}
+        if selected_student:
+            context.update({
+                'results': Result.objects.filter(student=selected_student, exam__is_published=True).select_related('exam'),
+                'attendance': selected_student.attendance_records.all()[:30],
+                'attendance_total': selected_student.attendance_records.count(),
+                'attendance_present': selected_student.attendance_records.filter(status__in=['present', 'late']).count(),
+                'achievements': selected_student.achievements.all()[:6],
+                'discipline': selected_student.disciplinary_actions.filter(parent_visible=True)[:6],
+                'materials': StudyMaterial.objects.filter(student_class=selected_student.student_class, is_published=True).select_related('subject')[:8],
+            })
+        return render(request, 'marks/portal_dashboard.html', context)
+
+    return redirect('marks:dashboard')
+
+
+@login_required
+def teacher_attendance(request, class_id):
+    teacher = _teacher_for(request)
+    if not teacher and not request.user.is_staff:
+        return redirect('marks:portal_dashboard')
+    student_class = get_object_or_404(Class, id=class_id, class_teacher=teacher)
+    attendance_date = request.POST.get('date') or request.GET.get('date') or date.today().isoformat()
+    students = student_class.students.filter(is_active=True)
+    if request.method == 'POST':
+        for student in students:
+            Attendance.objects.update_or_create(
+                student=student,
+                date=attendance_date,
+                defaults={
+                    'status': request.POST.get(f'status_{student.id}', 'present'),
+                    'remarks': request.POST.get(f'remarks_{student.id}', ''),
+                    'marked_by': teacher,
+                },
+            )
+        messages.success(request, 'Attendance saved for the class.')
+        return redirect('marks:teacher_attendance', class_id=class_id)
+    records = {record.student_id: record for record in Attendance.objects.filter(student__in=students, date=attendance_date)}
+    return render(request, 'marks/teacher_attendance.html', {'student_class': student_class, 'students': students, 'records': records, 'attendance_date': attendance_date})
+
+
+@login_required
+def teacher_create_achievement(request):
+    teacher = _teacher_for(request)
+    if not teacher and not request.user.is_staff:
+        return redirect('marks:portal_dashboard')
+    if request.method == 'POST':
+        Achievement.objects.create(
+            student_id=request.POST['student'], title=request.POST['title'], category=request.POST['category'],
+            description=request.POST.get('description', ''), achieved_on=request.POST['achieved_on'],
+            issuer=request.POST.get('issuer', ''), evidence_url=request.POST.get('evidence_url', ''), created_by=teacher,
+        )
+        messages.success(request, 'Achievement added to the student record.')
+        return redirect('marks:portal_dashboard')
+    return render(request, 'marks/teacher_record_form.html', {'record_type': 'Achievement', 'students': Student.objects.filter(is_active=True), 'categories': Achievement.CATEGORY_CHOICES})
+
+
+@login_required
+def teacher_create_discipline(request):
+    teacher = _teacher_for(request)
+    if not teacher and not request.user.is_staff:
+        return redirect('marks:portal_dashboard')
+    if request.method == 'POST':
+        DisciplinaryAction.objects.create(
+            student_id=request.POST['student'], action_type=request.POST['action_type'], severity=request.POST['severity'],
+            incident_date=request.POST['incident_date'], description=request.POST['description'],
+            resolution=request.POST.get('resolution', ''), parent_visible=request.POST.get('parent_visible') == 'on', reported_by=teacher,
+        )
+        messages.success(request, 'Student wellbeing record saved.')
+        return redirect('marks:portal_dashboard')
+    return render(request, 'marks/teacher_record_form.html', {'record_type': 'Disciplinary record', 'students': Student.objects.filter(is_active=True), 'action_types': DisciplinaryAction.ACTION_CHOICES, 'severity_levels': DisciplinaryAction.SEVERITY_CHOICES})
+
+
+@login_required
+def teacher_create_material(request):
+    teacher = _teacher_for(request)
+    if not teacher and not request.user.is_staff:
+        return redirect('marks:portal_dashboard')
+    if request.method == 'POST':
+        StudyMaterial.objects.create(
+            title=request.POST['title'], description=request.POST.get('description', ''), subject_id=request.POST.get('subject') or None,
+            student_class_id=request.POST.get('student_class') or None, external_url=request.POST.get('external_url', ''),
+            file=request.FILES.get('file'), is_published=request.POST.get('is_published') == 'on', uploaded_by=teacher,
+        )
+        messages.success(request, 'Study material published.')
+        return redirect('marks:portal_dashboard')
+    return render(request, 'marks/teacher_record_form.html', {'record_type': 'Study material', 'subjects': Subject.objects.all(), 'classes': Class.objects.all()})
+
+
+@login_required
+def teacher_create_assignment(request):
+    teacher = _teacher_for(request)
+    if not teacher and not request.user.is_staff:
+        return redirect('marks:portal_dashboard')
+    if request.method == 'POST':
+        Assignment.objects.create(
+            title=request.POST['title'], instructions=request.POST['instructions'],
+            subject_id=request.POST.get('subject') or None, student_class_id=request.POST['student_class'],
+            due_date=request.POST['due_date'], attachment=request.FILES.get('attachment'),
+            is_published=request.POST.get('is_published') == 'on', teacher=teacher,
+        )
+        messages.success(request, 'Assignment published.')
+        return redirect('marks:portal_dashboard')
+    classes = Class.objects.filter(class_teacher=teacher) if teacher else Class.objects.all()
+    return render(request, 'marks/teacher_record_form.html', {'record_type': 'Assignment', 'subjects': Subject.objects.all(), 'classes': classes})
+
+
+@login_required
+def student_submit_assignment(request, assignment_id):
+    student = _student_for(request)
+    assignment = get_object_or_404(Assignment, id=assignment_id, student_class=student.student_class, is_published=True)
+    if request.method == 'POST':
+        AssignmentSubmission.objects.update_or_create(
+            assignment=assignment, student=student,
+            defaults={'response': request.POST.get('response', ''), 'attachment': request.FILES.get('attachment'), 'status': 'submitted'},
+        )
+        messages.success(request, 'Assignment submitted.')
+    return redirect('marks:portal_dashboard')
+
+
+@login_required
+def create_performance_share(request, student_id):
+    student = get_object_or_404(Student, id=student_id)
+    if not (_teacher_for(request) or request.user.is_staff or _parent_for(request)):
+        return redirect('marks:portal_dashboard')
+    share = PerformanceShare.objects.create(student=student, created_by=request.user)
+    return render(request, 'marks/share_created.html', {'share': share, 'student': student})
+
+
+def shared_performance(request, token):
+    share = get_object_or_404(PerformanceShare.objects.select_related('student'), token=token, is_active=True)
+    if share.expires_at and share.expires_at <= timezone.now():
+        return HttpResponse('This performance link has expired.', status=410)
+    student = share.student
+    return render(request, 'marks/shared_performance_branded.html', {
+        'student': student,
+        'results': Result.objects.filter(student=student, exam__is_published=True).select_related('exam'),
+        'attendance': student.attendance_records.all()[:30],
+        'achievements': student.achievements.all()[:8],
+    })
 
 
 @login_required
@@ -259,6 +454,8 @@ class ExamDetailView(DetailView):
 
 @login_required
 def marks_entry(request, exam_id, class_id):
+    if not request.user.is_staff and not _teacher_for(request):
+        return redirect('marks:portal_dashboard')
     exam = get_object_or_404(Exam, id=exam_id)
     student_class = get_object_or_404(Class, id=class_id)
     students = student_class.students.filter(is_active=True)
@@ -306,6 +503,8 @@ def marks_entry(request, exam_id, class_id):
 
 @login_required
 def calculate_results(request, exam_id):
+    if not request.user.is_staff and not _teacher_for(request):
+        return redirect('marks:portal_dashboard')
     exam = get_object_or_404(Exam, id=exam_id)
 
     if request.method == 'POST':

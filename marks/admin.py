@@ -1,7 +1,9 @@
 from django.contrib import admin
 from .models import (
     AcademicYear, Class, Subject, Teacher, Student,
-    Exam, Marks, Result
+    Exam, Marks, Result, ParentProfile, Attendance, Achievement,
+    StudyMaterial, Assignment, AssignmentSubmission, DisciplinaryAction,
+    PerformanceShare
 )
 
 
@@ -123,3 +125,61 @@ class ResultAdmin(admin.ModelAdmin):
     raw_id_fields = ['student', 'exam']
     readonly_fields = ['calculated_date']
     list_select_related = ['student', 'student__student_class', 'exam']
+
+
+@admin.register(ParentProfile)
+class ParentProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'relationship', 'phone']
+    search_fields = ['user__username', 'user__first_name', 'user__last_name', 'phone']
+    filter_horizontal = ['students']
+
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    list_display = ['student', 'date', 'status', 'marked_by', 'remarks']
+    list_filter = ['status', 'date', 'student__student_class']
+    search_fields = ['student__first_name', 'student__last_name', 'student__admission_number']
+    date_hierarchy = 'date'
+
+
+@admin.register(Achievement)
+class AchievementAdmin(admin.ModelAdmin):
+    list_display = ['student', 'title', 'category', 'achieved_on', 'issuer', 'created_by']
+    list_filter = ['category', 'achieved_on']
+    search_fields = ['student__first_name', 'student__last_name', 'title', 'issuer']
+
+
+@admin.register(StudyMaterial)
+class StudyMaterialAdmin(admin.ModelAdmin):
+    list_display = ['title', 'student_class', 'subject', 'uploaded_by', 'is_published', 'created_at']
+    list_filter = ['is_published', 'subject', 'student_class']
+    search_fields = ['title', 'description']
+
+
+@admin.register(Assignment)
+class AssignmentAdmin(admin.ModelAdmin):
+    list_display = ['title', 'student_class', 'subject', 'teacher', 'due_date', 'is_published']
+    list_filter = ['is_published', 'student_class', 'subject', 'due_date']
+    search_fields = ['title', 'instructions']
+
+
+@admin.register(AssignmentSubmission)
+class AssignmentSubmissionAdmin(admin.ModelAdmin):
+    list_display = ['assignment', 'student', 'status', 'grade', 'submitted_at', 'reviewed_at']
+    list_filter = ['status', 'assignment__student_class']
+    search_fields = ['assignment__title', 'student__first_name', 'student__last_name']
+
+
+@admin.register(DisciplinaryAction)
+class DisciplinaryActionAdmin(admin.ModelAdmin):
+    list_display = ['student', 'action_type', 'severity', 'incident_date', 'parent_visible', 'reported_by']
+    list_filter = ['action_type', 'severity', 'parent_visible', 'incident_date']
+    search_fields = ['student__first_name', 'student__last_name', 'description', 'resolution']
+
+
+@admin.register(PerformanceShare)
+class PerformanceShareAdmin(admin.ModelAdmin):
+    list_display = ['student', 'token', 'is_active', 'expires_at', 'created_by', 'created_at']
+    list_filter = ['is_active', 'expires_at']
+    search_fields = ['student__first_name', 'student__last_name', 'token']
+    readonly_fields = ['token', 'created_at']

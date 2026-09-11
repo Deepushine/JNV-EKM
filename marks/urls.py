@@ -4,7 +4,17 @@ from . import views
 app_name = 'marks'
 
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
+    path('', views.home, name='home'),
+    path('dashboard/', views.dashboard, name='dashboard'),
+    path('portal/', views.portal_dashboard, name='portal_dashboard'),
+    path('portal/teacher/attendance/<int:class_id>/', views.teacher_attendance, name='teacher_attendance'),
+    path('portal/teacher/achievement/add/', views.teacher_create_achievement, name='teacher_create_achievement'),
+    path('portal/teacher/discipline/add/', views.teacher_create_discipline, name='teacher_create_discipline'),
+    path('portal/teacher/material/add/', views.teacher_create_material, name='teacher_create_material'),
+    path('portal/teacher/assignment/add/', views.teacher_create_assignment, name='teacher_create_assignment'),
+    path('portal/student/assignment/<int:assignment_id>/submit/', views.student_submit_assignment, name='student_submit_assignment'),
+    path('portal/share/<int:student_id>/', views.create_performance_share, name='create_performance_share'),
+    path('performance/share/<uuid:token>/', views.shared_performance, name='shared_performance'),
 
     path('academic-years/', views.AcademicYearListView.as_view(), name='academic_year_list'),
     path('academic-years/add/', views.AcademicYearCreateView.as_view(), name='academic_year_create'),

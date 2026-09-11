@@ -6,6 +6,11 @@ register = template.Library()
 def getitem(dictionary, key):
     return dictionary.get(key)
 
+
+@register.filter(name='get_item')
+def get_item(dictionary, key):
+    return dictionary.get(key)
+
 @register.filter
 def filter_exam(marks_queryset, exam):
     return marks_queryset.filter(exam=exam).select_related('subject')

@@ -1,3 +1,6 @@
+import uuid
+
+from django.conf import settings
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 
@@ -66,6 +69,7 @@ class Teacher(models.Model):
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
     email = models.EmailField(unique=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='teacher_profile')
     phone = models.CharField(max_length=15, blank=True)
     subjects = models.ManyToManyField(Subject, related_name='teachers', blank=True)
     date_joined = models.DateField(auto_now_add=True)
@@ -100,6 +104,7 @@ class Student(models.Model):
     address = models.TextField()
     phone = models.CharField(max_length=15)
     email = models.EmailField(blank=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='student_profile')
     admission_date = models.DateField()
     is_active = models.BooleanField(default=True)
     photo = models.ImageField(upload_to='student_photos/', blank=True, null=True)
@@ -238,3 +243,143 @@ class Result(models.Model):
         else:
             self.grade = 'E'
         self.save()
+
+
+class ParentProfile(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='parent_profile')
+    students = models.ManyToManyField(Student, related_name='parents', blank=True)
+    phone = models.CharField(max_length=15, blank=True)
+    relationship = models.CharField(max_length=40, default='Parent')
+
+    def __str__(self):
+        return self.user.get_full_name() or self.user.username
+
+
+class Attendance(models.Model):
+    STATUS_CHOICES = [
+        ('present', 'Present'),
+        ('absent', 'Absent'),
+        ('late', 'Late'),
+        ('excused', 'Excused'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='attendance_records')
+    date = models.DateField()
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='present')
+    marked_by = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, related_name='attendance_records')
+    remarks = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', 'student__roll_number']
+        constraints = [models.UniqueConstraint(fields=['student', 'date'], name='unique_student_attendance_date')]
+
+
+class Achievement(models.Model):
+    CATEGORY_CHOICES = [
+        ('academic', 'Academic'),
+        ('sports', 'Sports'),
+        ('arts', 'Arts & Culture'),
+        ('service', 'Leadership & Service'),
+        ('other', 'Other'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='achievements')
+    title = models.CharField(max_length=160)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='academic')
+    description = models.TextField(blank=True)
+    achieved_on = models.DateField()
+    issuer = models.CharField(max_length=120, blank=True)
+    evidence_url = models.URLField(blank=True)
+    created_by = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, related_name='achievements_created')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-achieved_on', '-created_at']
+
+
+class StudyMaterial(models.Model):
+    title = models.CharField(max_length=160)
+    description = models.TextField(blank=True)
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name='study_materials')
+    student_class = models.ForeignKey(Class, on_delete=models.CASCADE, null=True, blank=True, related_name='study_materials')
+    uploaded_by = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, related_name='study_materials')
+    file = models.FileField(upload_to='study_materials/', blank=True)
+    external_url = models.URLField(blank=True)
+    is_published = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class Assignment(models.Model):
+    title = models.CharField(max_length=160)
+    instructions = models.TextField()
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name='assignments')
+    student_class = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='assignments')
+    teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, related_name='assignments')
+    due_date = models.DateField()
+    attachment = models.FileField(upload_to='assignments/', blank=True)
+    is_published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['due_date', '-created_at']
+
+
+class AssignmentSubmission(models.Model):
+    STATUS_CHOICES = [
+        ('submitted', 'Submitted'),
+        ('reviewed', 'Reviewed'),
+        ('late', 'Late'),
+    ]
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name='submissions')
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='assignment_submissions')
+    response = models.TextField(blank=True)
+    attachment = models.FileField(upload_to='assignment_submissions/', blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='submitted')
+    grade = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    feedback = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-submitted_at']
+        constraints = [models.UniqueConstraint(fields=['assignment', 'student'], name='unique_assignment_submission')]
+
+
+class DisciplinaryAction(models.Model):
+    ACTION_CHOICES = [
+        ('note', 'Note'),
+        ('warning', 'Warning'),
+        ('counselling', 'Counselling'),
+        ('action', 'Disciplinary Action'),
+    ]
+    SEVERITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='disciplinary_actions')
+    reported_by = models.ForeignKey(Teacher, on_delete=models.SET_NULL, null=True, blank=True, related_name='disciplinary_actions')
+    action_type = models.CharField(max_length=20, choices=ACTION_CHOICES, default='note')
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='low')
+    incident_date = models.DateField()
+    description = models.TextField()
+    resolution = models.TextField(blank=True)
+    parent_visible = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-incident_date', '-created_at']
+
+
+class PerformanceShare(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='performance_shares')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='performance_shares')
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
