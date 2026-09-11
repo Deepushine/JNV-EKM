@@ -2,6 +2,19 @@
 
 This project is configured for Render with a managed PostgreSQL database.
 
+## Vercel
+
+The repository also contains `vercel.json` and `api/index.py` so the connected Vercel project can run Django as a Python function. In the Vercel project settings, add these environment variables for **Production**:
+
+- `DJANGO_SECRET_KEY`: a long random secret
+- `DJANGO_DEBUG`: `False`
+- `DJANGO_ALLOWED_HOSTS`: `jnvekm.vercel.app`
+- `CSRF_TRUSTED_ORIGINS`: `https://jnvekm.vercel.app`
+- `DATABASE_URL`: a hosted PostgreSQL connection string
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD`, `TEACHER_USERNAME`, `TEACHER_PASSWORD`
+
+Vercel's filesystem is not persistent, so do not use the checked-in SQLite database for production data. Use PostgreSQL and run `python manage.py migrate` and `python manage.py seed_initial_data` once against that database. For a long-running Django service with managed database provisioning, the Render Blueprint below remains the simpler option.
+
 ## Deploy
 
 1. Purchase `jnvernakulam.com` or use a domain registrar where you control DNS.
