@@ -3,7 +3,7 @@ from .models import (
     AcademicYear, Class, Subject, Teacher, Student,
     Exam, Marks, Result, ParentProfile, Attendance, Achievement,
     StudyMaterial, Assignment, AssignmentSubmission, DisciplinaryAction,
-    PerformanceShare
+    PerformanceShare, StudentRole, StudentLeave, StudentClassChangeRequest
 )
 
 
@@ -55,11 +55,11 @@ class SubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
-    list_display = ['employee_id', 'full_name', 'email', 'phone', 'subjects_count', 'is_active', 'date_joined']
-    list_filter = ['is_active', 'subjects']
+    list_display = ['employee_id', 'full_name', 'email', 'phone', 'role', 'approval_status', 'subjects_count', 'is_active', 'date_joined']
+    list_filter = ['is_active', 'approval_status', 'role', 'subjects']
     search_fields = ['employee_id', 'first_name', 'last_name', 'email']
     ordering = ['last_name', 'first_name']
-    filter_horizontal = ['subjects']
+    filter_horizontal = ['subjects', 'assigned_classes']
     
     def subjects_count(self, obj):
         return obj.subjects.count()
@@ -72,8 +72,8 @@ class TeacherAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ['admission_number', 'roll_number', 'full_name', 'student_class', 'gender', 'date_of_birth', 'phone', 'is_active']
-    list_filter = ['student_class', 'gender', 'is_active', 'student_class__academic_year']
+    list_display = ['admission_number', 'roll_number', 'full_name', 'student_class', 'approval_status', 'gender', 'date_of_birth', 'phone', 'is_active']
+    list_filter = ['student_class', 'approval_status', 'gender', 'is_active', 'student_class__academic_year']
     search_fields = ['admission_number', 'roll_number', 'first_name', 'last_name', 'father_name', 'mother_name']
     ordering = ['student_class', 'roll_number']
     raw_id_fields = ['student_class']
@@ -183,3 +183,25 @@ class PerformanceShareAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'expires_at']
     search_fields = ['student__first_name', 'student__last_name', 'token']
     readonly_fields = ['token', 'created_at']
+
+
+@admin.register(StudentRole)
+class StudentRoleAdmin(admin.ModelAdmin):
+    list_display = ['student', 'role', 'title', 'start_date', 'end_date', 'is_active']
+    list_filter = ['role', 'is_active']
+    search_fields = ['student__first_name', 'student__last_name', 'student__admission_number', 'title']
+
+
+@admin.register(StudentLeave)
+class StudentLeaveAdmin(admin.ModelAdmin):
+    list_display = ['student', 'start_date', 'end_date', 'status', 'reason', 'approved_by']
+    list_filter = ['status', 'start_date', 'end_date']
+    search_fields = ['student__first_name', 'student__last_name', 'reason']
+
+
+@admin.register(StudentClassChangeRequest)
+class StudentClassChangeRequestAdmin(admin.ModelAdmin):
+    list_display = ['student', 'requested_class', 'status', 'created_at', 'reviewed_by']
+    list_filter = ['status', 'requested_class']
+    search_fields = ['student__first_name', 'student__last_name', 'student__admission_number']
+    readonly_fields = ['created_at', 'reviewed_at']

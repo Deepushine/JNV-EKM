@@ -1,6 +1,7 @@
 {% extends 'marks/base.html' %}
+{% load marks_extras %}
 
-{% block title %}Marks Entry: {{ exam.name }} - {{ student_class }} - JNV Ernakulam{% endblock %}
+{% block title %}JNV MarkFlow | Marks Entry: {{ exam.name }} - {{ student_class }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -8,7 +9,7 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background: #f8fafc;
+    background: #eeece7;
     white-space: nowrap;
 }
 .marks-entry-table td:first-child,
@@ -21,6 +22,9 @@
 }
 .marks-entry-table td:nth-child(2) { left: 60px; }
 .marks-entry-table td:nth-child(3) { left: 180px; }
+.marks-entry-table td:first-child,
+.marks-entry-table td:nth-child(2),
+.marks-entry-table td:nth-child(3) { background: rgba(255, 255, 255, .92); }
 .marks-input {
     width: 90px;
     padding: 0.375rem 0.5rem;
@@ -41,6 +45,10 @@
     padding: 0.375rem 0.5rem;
     font-size: 0.8125rem;
 }
+.mark-meta { display: flex; justify-content: space-between; gap: .4rem; color: #6d6b67; font-size: .72rem; }
+.student-summary { min-width: 130px; background: rgba(36, 87, 166, .06) !important; }
+.student-summary strong { color: #2457a6; }
+.subject-complete { color: #4f9b72; font-size: .72rem; font-weight: 700; }
 </style>
 {% endblock %}
 
@@ -51,8 +59,11 @@
         <p class="text-muted mb-0">{{ exam.name }} - {{ student_class }} | {{ exam.academic_year.name }}</p>
     </div>
     <div>
-        <a href="{% url 'marks:exam_detail' exam.id %}" class="btn btn-outline-secondary me-2">
+        <a href="{% url 'marks:dashboard' %}?class={{ student_class.id }}&exam={{ exam.id }}" class="btn btn-outline-secondary me-2">
             <i class="fas fa-arrow-left me-2"></i>Back to Exam
+        </a>
+        <a href="{% url 'marks:export_marks_excel' exam.id student_class.id %}" class="btn btn-outline-success me-2">
+            <i class="fas fa-file-excel me-2"></i>Download Excel
         </a>
         <button type="submit" form="marksForm" class="btn btn-primary">
             <i class="fas fa-save me-2"></i>Save Marks
@@ -76,6 +87,7 @@
                             <small class="text-muted">({{ subject.max_marks }})</small>
                         </th>
                         {% endfor %}
+                        <th class="text-center" style="min-width: 130px;">Class summary</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -98,6 +110,10 @@
                                        value="{{ mark.marks_obtained|default:'' }}"
                                        {% if mark.is_absent %}disabled{% endif %}
                                        placeholder="-">
+                                <div class="mark-meta">
+                                    <span class="mark-percent">{% if mark %}{{ mark.percentage }}%{% endif %}</span>
+                                    <span>/ {{ subject.max_marks }}</span>
+                                </div>
                                 <div class="form-check form-switch">
                                     <input class="form-check-input absent-checkbox" 
                                            type="checkbox" 
@@ -117,6 +133,13 @@
                         {% endwith %}
                         {% endwith %}
                         {% endfor %}
+                        {% with summary=student_summaries|get_item:student.id %}
+                        <td class="student-summary text-center">
+                            <strong class="row-total">{{ summary.total }} / {{ summary.max_total }}</strong>
+                            <div class="row-percent">{{ summary.percentage }}%</div>
+                            {% if summary.complete %}<span class="subject-complete">Complete</span>{% else %}<span class="text-muted small">In progress</span>{% endif %}
+                        </td>
+                        {% endwith %}
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -125,7 +148,8 @@
     </div>
     <div class="card-footer bg-light">
         <div class="d-flex justify-content-between">
-            <small class="text-muted">Total Students: {{ students.count }} | Total Subjects: {{ subjects.count }}</small>
+            <small class="text-muted">{{ students.count }} students | {{ subjects.count }} subject columns{% if all_marks_complete %} · All marks uploaded{% endif %}</small>
+            {% if can_generate_report %}<a class="btn btn-outline-primary" href="{% url 'marks:calculate_results' exam.id %}"><i class="fas fa-file-circle-check me-2"></i>Generate report cards</a>{% endif %}
             <button type="submit" class="btn btn-primary">
                 <i class="fas fa-save me-2"></i>Save All Marks
             </button>
@@ -150,11 +174,19 @@ function toggleAbsent(checkbox, key) {
     }
 }
 
+function updateMarkPercent(input) {
+    const max = Number(input.max || 0);
+    const value = Number(input.value || 0);
+    const meta = input.closest('td').querySelector('.mark-percent');
+    if (meta) meta.textContent = value && max ? `${((value / max) * 100).toFixed(2)}%` : '';
+}
+
 // Auto-save draft to localStorage
 const form = document.getElementById('marksForm');
 const inputs = form.querySelectorAll('input');
 
 inputs.forEach(input => {
+    if (input.type === 'number') input.addEventListener('input', () => updateMarkPercent(input));
     input.addEventListener('change', () => {
         const formData = new FormData(form);
         const data = {};

@@ -65,6 +65,17 @@ class Subject(models.Model):
 
 
 class Teacher(models.Model):
+    ROLE_CHOICES = [
+        ('teacher', 'Teacher'),
+        ('ahm', 'Assistant House Master/Matron'),
+        ('hm', 'House Master/Matron'),
+        ('other', 'Other duty'),
+    ]
+    APPROVAL_CHOICES = [
+        ('pending', 'Pending approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
     employee_id = models.CharField(max_length=20, unique=True)
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=50)
@@ -72,6 +83,10 @@ class Teacher(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='teacher_profile')
     phone = models.CharField(max_length=15, blank=True)
     subjects = models.ManyToManyField(Subject, related_name='teachers', blank=True)
+    assigned_classes = models.ManyToManyField(Class, related_name='subject_teachers', blank=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='teacher')
+    duties = models.CharField(max_length=255, blank=True, help_text='Additional duties, such as house or club responsibility')
+    approval_status = models.CharField(max_length=12, choices=APPROVAL_CHOICES, default='approved')
     date_joined = models.DateField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
 
@@ -87,6 +102,11 @@ class Teacher(models.Model):
 
 
 class Student(models.Model):
+    APPROVAL_CHOICES = [
+        ('pending', 'Pending approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
     GENDER_CHOICES = [
         ('M', 'Male'),
         ('F', 'Female'),
@@ -107,6 +127,7 @@ class Student(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='student_profile')
     admission_date = models.DateField()
     is_active = models.BooleanField(default=True)
+    approval_status = models.CharField(max_length=12, choices=APPROVAL_CHOICES, default='approved')
     photo = models.ImageField(upload_to='student_photos/', blank=True, null=True)
 
     class Meta:
@@ -371,6 +392,63 @@ class DisciplinaryAction(models.Model):
 
     class Meta:
         ordering = ['-incident_date', '-created_at']
+
+
+class StudentRole(models.Model):
+    ROLE_CHOICES = [
+        ('captain', 'Captain'),
+        ('vice_captain', 'Vice Captain'),
+        ('prefect', 'Prefect'),
+        ('other', 'Other role'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='roles')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    title = models.CharField(max_length=100, blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-is_active', '-start_date']
+
+    def __str__(self):
+        return self.title or self.get_role_display()
+
+
+class StudentLeave(models.Model):
+    STATUS_CHOICES = [
+        ('requested', 'Requested'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='leaves')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField()
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='requested')
+    approved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_student_leaves')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date']
+
+
+class StudentClassChangeRequest(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='class_change_requests')
+    requested_class = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='class_change_requests')
+    reason = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending')
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_class_change_requests')
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
 
 class PerformanceShare(models.Model):

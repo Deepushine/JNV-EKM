@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.db.models import Sum, Avg, Count, Q, F, Max, Min
 from django.http import JsonResponse, HttpResponse
@@ -7,7 +7,8 @@ from django.core.paginator import Paginator
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, IntegrityError
+from decimal import Decimal, InvalidOperation
 import csv
 import openpyxl
 from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -17,12 +18,15 @@ from datetime import date
 from .models import (
     AcademicYear, Class, Subject, Teacher, Student,
     Exam, Marks, Result, Attendance, Achievement, StudyMaterial,
-    Assignment, AssignmentSubmission, DisciplinaryAction, PerformanceShare
+    Assignment, AssignmentSubmission, DisciplinaryAction, PerformanceShare,
+    StudentRole, StudentLeave, StudentClassChangeRequest
 )
 
 
 def home(request):
-    return render(request, 'marks/home.html')
+    if request.user.is_authenticated:
+        return redirect('marks:dashboard')
+    return redirect('marks:login')
 
 
 def _teacher_for(request):
@@ -37,21 +41,55 @@ def _parent_for(request):
     return getattr(request.user, 'parent_profile', None)
 
 
+def _is_staff(user):
+    return user.is_authenticated and user.is_staff
+
+
+def _teacher_can_access_class(teacher, student_class):
+    return (
+        student_class.class_teacher_id == teacher.id
+        or teacher.assigned_classes.filter(id=student_class.id).exists()
+    )
+
+
+def _teacher_subjects_for_class(teacher, student_class):
+    return student_class.subjects.filter(teachers=teacher).distinct()
+
+
+class AdminRequiredMixin:
+    def dispatch(self, request, *args, **kwargs):
+        if not _is_staff(request.user):
+            return redirect('marks:portal_dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+
 @login_required
 def portal_dashboard(request):
     teacher = _teacher_for(request)
     student = _student_for(request)
     parent = _parent_for(request)
 
+    if teacher and (not teacher.is_active or teacher.approval_status != 'approved'):
+        return render(request, 'marks/portal_dashboard.html', {
+            'role': 'pending', 'approval_status': teacher.get_approval_status_display(),
+        })
+
     if teacher:
-        classes = Class.objects.filter(class_teacher=teacher).prefetch_related('students')
+        classes = Class.objects.filter(Q(class_teacher=teacher) | Q(subject_teachers=teacher)).distinct().prefetch_related('students')
         assignments = Assignment.objects.filter(teacher=teacher).select_related('student_class', 'subject')[:6]
         materials = StudyMaterial.objects.filter(uploaded_by=teacher)[:6]
+        mark_entry_options = [
+            {'exam': exam, 'student_class': student_class}
+            for exam in Exam.objects.filter(classes__in=classes, is_published=False).distinct()[:12]
+            for student_class in exam.classes.filter(id__in=classes.values('id'))
+        ]
         return render(request, 'marks/portal_dashboard.html', {
             'role': 'teacher', 'teacher': teacher, 'classes': classes,
             'assignments': assignments, 'materials': materials,
             'student_count': Student.objects.filter(student_class__class_teacher=teacher, is_active=True).count(),
             'pending_submissions': AssignmentSubmission.objects.filter(assignment__teacher=teacher, status='submitted').count(),
+            'teacher_roles': [teacher.get_role_display()] + ([teacher.duties] if teacher.duties else []),
+            'mark_entry_options': mark_entry_options,
         })
 
     if student:
@@ -67,6 +105,8 @@ def portal_dashboard(request):
             'assignments': assignments, 'submissions': submissions, 'materials': materials,
             'achievements': student.achievements.all()[:6],
             'discipline': student.disciplinary_actions.filter(parent_visible=True)[:6],
+            'student_roles': student.roles.filter(is_active=True),
+            'leaves': student.leaves.filter(status='approved')[:6],
         })
 
     if parent:
@@ -81,6 +121,8 @@ def portal_dashboard(request):
                 'attendance_present': selected_student.attendance_records.filter(status__in=['present', 'late']).count(),
                 'achievements': selected_student.achievements.all()[:6],
                 'discipline': selected_student.disciplinary_actions.filter(parent_visible=True)[:6],
+                'student_roles': selected_student.roles.filter(is_active=True),
+                'leaves': selected_student.leaves.filter(status='approved')[:6],
                 'materials': StudyMaterial.objects.filter(student_class=selected_student.student_class, is_published=True).select_related('subject')[:8],
             })
         return render(request, 'marks/portal_dashboard.html', context)
@@ -216,54 +258,229 @@ def shared_performance(request, token):
 
 @login_required
 def dashboard(request):
+    teacher = _teacher_for(request)
+    if teacher and (not teacher.is_active or teacher.approval_status != 'approved'):
+        return render(request, 'marks/portal_dashboard.html', {'role': 'pending', 'approval_status': teacher.get_approval_status_display()})
+
+    if teacher and not request.user.is_staff:
+        classes = Class.objects.filter(Q(class_teacher=teacher) | Q(subject_teachers=teacher)).distinct()
+    else:
+        classes = Class.objects.all()
+    selected_class = classes.filter(id=request.GET.get('class')).first() if request.GET.get('class') else classes.first()
+    exams = Exam.objects.filter(classes=selected_class).order_by('-start_date') if selected_class else Exam.objects.none()
+    selected_exam = exams.filter(id=request.GET.get('exam')).first() if request.GET.get('exam') else exams.first()
+    if request.method == 'POST':
+        if not request.user.is_staff:
+            return redirect('marks:dashboard')
+        exam_name = request.POST.get('name', '').strip()
+        exam_date = request.POST.get('exam_date')
+        class_id = request.POST.get('class_id')
+        if exam_name and exam_date and class_id:
+            student_class = get_object_or_404(Class, id=class_id)
+            academic_year = student_class.academic_year
+            exam = Exam.objects.create(
+                name=exam_name, exam_type='unit_test', academic_year=academic_year,
+                start_date=exam_date, end_date=exam_date,
+            )
+            exam.classes.add(student_class)
+            messages.success(request, f'{exam.name} created for {student_class}.')
+            return redirect(f'{reverse_lazy("marks:dashboard")}?class={student_class.id}&exam={exam.id}')
     active_year = AcademicYear.objects.filter(is_active=True).first()
-    total_students = Student.objects.filter(is_active=True).count()
-    total_teachers = Teacher.objects.filter(is_active=True).count()
-    total_classes = Class.objects.count()
-    total_subjects = Subject.objects.count()
-    recent_exams = Exam.objects.all()[:5]
-    pending_results = Exam.objects.filter(is_published=False).count()
-
-    context = {
-        'active_year': active_year,
-        'total_students': total_students,
-        'total_teachers': total_teachers,
-        'total_classes': total_classes,
-        'total_subjects': total_subjects,
-        'recent_exams': recent_exams,
-        'pending_results': pending_results,
-    }
-    return render(request, 'marks/dashboard.html', context)
+    return render(request, 'marks/marks_workspace.html', {
+        'classes': classes, 'selected_class': selected_class, 'exams': exams,
+        'selected_exam': selected_exam, 'active_year': active_year,
+        'is_admin': request.user.is_staff,
+    })
 
 
-class AcademicYearListView(ListView):
+@user_passes_test(_is_staff)
+def school_setup(request):
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        try:
+            if action == 'add_class':
+                Class.objects.create(
+                    name=request.POST['name'].strip(), section=request.POST['section'],
+                    academic_year_id=request.POST['academic_year'],
+                )
+                messages.success(request, 'Class and section added.')
+            elif action == 'edit_class':
+                class_obj = get_object_or_404(Class, id=request.POST['class_id'])
+                class_obj.name = request.POST['name'].strip()
+                class_obj.section = request.POST['section']
+                class_obj.academic_year_id = request.POST['academic_year']
+                class_obj.save()
+                messages.success(request, 'Class updated.')
+            elif action == 'add_subject':
+                subject = Subject.objects.create(
+                    name=request.POST['name'].strip(), code=request.POST['code'].strip(),
+                    max_marks=request.POST['max_marks'], pass_marks=request.POST['pass_marks'],
+                )
+                subject.classes.add(request.POST['class_id'])
+                if request.POST.get('teacher_id'):
+                    teacher = get_object_or_404(Teacher, id=request.POST['teacher_id'])
+                    teacher.subjects.add(subject)
+                    teacher.assigned_classes.add(request.POST['class_id'])
+                messages.success(request, 'Subject mark template added.')
+            elif action == 'edit_subject':
+                subject = get_object_or_404(Subject, id=request.POST['subject_id'])
+                subject.name = request.POST['name'].strip()
+                subject.code = request.POST['code'].strip()
+                subject.max_marks = request.POST['max_marks']
+                subject.pass_marks = request.POST['pass_marks']
+                subject.save()
+                subject.classes.set([request.POST['class_id']])
+                if request.POST.get('teacher_id'):
+                    teacher = get_object_or_404(Teacher, id=request.POST['teacher_id'])
+                    teacher.subjects.add(subject)
+                    teacher.assigned_classes.add(request.POST['class_id'])
+                messages.success(request, 'Subject mark template updated.')
+            elif action == 'add_student':
+                Student.objects.create(
+                    admission_number=request.POST['admission_number'].strip(),
+                    roll_number=request.POST['roll_number'].strip(),
+                    first_name=request.POST['first_name'].strip(), last_name=request.POST['last_name'].strip(),
+                    gender=request.POST['gender'], date_of_birth=request.POST['date_of_birth'],
+                    student_class_id=request.POST['student_class'], father_name=request.POST['father_name'].strip(),
+                    mother_name=request.POST['mother_name'].strip(), address=request.POST['address'].strip(),
+                    phone=request.POST['phone'].strip(), email=request.POST.get('email', '').strip(),
+                    admission_date=request.POST['admission_date'], approval_status='approved', is_active=True,
+                )
+                messages.success(request, 'Student added.')
+            elif action == 'edit_student':
+                student = get_object_or_404(Student, id=request.POST['student_id'])
+                student.first_name = request.POST['first_name'].strip()
+                student.last_name = request.POST['last_name'].strip()
+                student.roll_number = request.POST['roll_number'].strip()
+                student.student_class_id = request.POST['student_class']
+                student.phone = request.POST['phone'].strip()
+                student.email = request.POST.get('email', '').strip()
+                student.save(update_fields=['first_name', 'last_name', 'roll_number', 'student_class', 'phone', 'email'])
+                messages.success(request, 'Student updated.')
+        except (KeyError, ValueError, IntegrityError) as error:
+            messages.error(request, f'Could not save that change: {error}')
+        return redirect('marks:school_setup')
+
+    return render(request, 'marks/school_setup.html', {
+        'years': AcademicYear.objects.all(), 'classes': Class.objects.select_related('academic_year'),
+        'subjects': Subject.objects.prefetch_related('classes', 'teachers'),
+        'students': Student.objects.select_related('student_class')[:100],
+        'teachers': Teacher.objects.filter(is_active=True, approval_status='approved'),
+    })
+
+
+class StudentRegistrationView(CreateView):
+    model = Student
+    template_name = 'marks/student_form.html'
+    fields = ['admission_number', 'roll_number', 'first_name', 'last_name', 'gender',
+              'date_of_birth', 'student_class', 'father_name', 'mother_name',
+              'address', 'phone', 'email', 'admission_date', 'photo']
+    success_url = reverse_lazy('marks:home')
+
+    def form_valid(self, form):
+        form.instance.approval_status = 'pending'
+        form.instance.is_active = False
+        messages.success(self.request, 'Student registration submitted for admin approval.')
+        return super().form_valid(form)
+
+
+class TeacherRegistrationView(CreateView):
+    model = Teacher
+    template_name = 'marks/teacher_form.html'
+    fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone', 'role', 'duties']
+    success_url = reverse_lazy('marks:home')
+
+    def form_valid(self, form):
+        form.instance.approval_status = 'pending'
+        form.instance.is_active = False
+        messages.success(self.request, 'Teacher registration submitted for admin approval.')
+        return super().form_valid(form)
+
+
+@login_required
+def request_class_change(request):
+    student = _student_for(request)
+    if not student:
+        return redirect('marks:portal_dashboard')
+    if request.method == 'POST':
+        StudentClassChangeRequest.objects.create(
+            student=student,
+            requested_class_id=request.POST['requested_class'],
+            reason=request.POST.get('reason', ''),
+        )
+        messages.success(request, 'Class change request submitted for admin approval.')
+        return redirect('marks:portal_dashboard')
+    return render(request, 'marks/class_change_request_form.html', {'classes': Class.objects.exclude(id=student.student_class_id)})
+
+
+@user_passes_test(_is_staff)
+def approve_class_change(request, request_id):
+    change_request = get_object_or_404(StudentClassChangeRequest, id=request_id, status='pending')
+    if request.method == 'POST':
+        decision = request.POST.get('decision')
+        change_request.status = decision if decision in ('approved', 'rejected') else 'rejected'
+        change_request.reviewed_by = request.user
+        change_request.reviewed_at = timezone.now()
+        if change_request.status == 'approved':
+            change_request.student.student_class = change_request.requested_class
+            change_request.student.save(update_fields=['student_class'])
+        change_request.save(update_fields=['status', 'reviewed_by', 'reviewed_at'])
+        messages.success(request, f'Class change request {change_request.status}.')
+    return redirect('marks:dashboard')
+
+
+@user_passes_test(_is_staff)
+def approve_student(request, student_id):
+    student = get_object_or_404(Student, id=student_id, approval_status='pending')
+    if request.method == 'POST':
+        decision = request.POST.get('decision')
+        student.approval_status = decision if decision in ('approved', 'rejected') else 'rejected'
+        student.is_active = student.approval_status == 'approved'
+        student.save(update_fields=['approval_status', 'is_active'])
+        messages.success(request, f'Student registration {student.approval_status}.')
+    return redirect('marks:dashboard')
+
+
+@user_passes_test(_is_staff)
+def approve_teacher(request, teacher_id):
+    teacher = get_object_or_404(Teacher, id=teacher_id, approval_status='pending')
+    if request.method == 'POST':
+        decision = request.POST.get('decision')
+        teacher.approval_status = decision if decision in ('approved', 'rejected') else 'rejected'
+        teacher.is_active = teacher.approval_status == 'approved'
+        teacher.save(update_fields=['approval_status', 'is_active'])
+        messages.success(request, f'Teacher registration {teacher.approval_status}.')
+    return redirect('marks:dashboard')
+
+
+class AcademicYearListView(AdminRequiredMixin, ListView):
     model = AcademicYear
     template_name = 'marks/academic_year_list.html'
     context_object_name = 'years'
     paginate_by = 10
 
 
-class AcademicYearCreateView(CreateView):
+class AcademicYearCreateView(AdminRequiredMixin, CreateView):
     model = AcademicYear
     template_name = 'marks/academic_year_form.html'
     fields = ['name', 'start_date', 'end_date', 'is_active']
     success_url = reverse_lazy('marks:academic_year_list')
 
 
-class AcademicYearUpdateView(UpdateView):
+class AcademicYearUpdateView(AdminRequiredMixin, UpdateView):
     model = AcademicYear
     template_name = 'marks/academic_year_form.html'
     fields = ['name', 'start_date', 'end_date', 'is_active']
     success_url = reverse_lazy('marks:academic_year_list')
 
 
-class AcademicYearDeleteView(DeleteView):
+class AcademicYearDeleteView(AdminRequiredMixin, DeleteView):
     model = AcademicYear
     template_name = 'marks/academic_year_confirm_delete.html'
     success_url = reverse_lazy('marks:academic_year_list')
 
 
-class ClassListView(ListView):
+class ClassListView(AdminRequiredMixin, ListView):
     model = Class
     template_name = 'marks/class_list.html'
     context_object_name = 'classes'
@@ -282,27 +499,27 @@ class ClassListView(ListView):
         return context
 
 
-class ClassCreateView(CreateView):
+class ClassCreateView(AdminRequiredMixin, CreateView):
     model = Class
     template_name = 'marks/class_form.html'
     fields = ['name', 'section', 'academic_year', 'class_teacher']
     success_url = reverse_lazy('marks:class_list')
 
 
-class ClassUpdateView(UpdateView):
+class ClassUpdateView(AdminRequiredMixin, UpdateView):
     model = Class
     template_name = 'marks/class_form.html'
     fields = ['name', 'section', 'academic_year', 'class_teacher']
     success_url = reverse_lazy('marks:class_list')
 
 
-class ClassDeleteView(DeleteView):
+class ClassDeleteView(AdminRequiredMixin, DeleteView):
     model = Class
     template_name = 'marks/class_confirm_delete.html'
     success_url = reverse_lazy('marks:class_list')
 
 
-class ClassDetailView(DetailView):
+class ClassDetailView(AdminRequiredMixin, DetailView):
     model = Class
     template_name = 'marks/class_detail.html'
     context_object_name = 'class_obj'
@@ -315,61 +532,61 @@ class ClassDetailView(DetailView):
         return context
 
 
-class SubjectListView(ListView):
+class SubjectListView(AdminRequiredMixin, ListView):
     model = Subject
     template_name = 'marks/subject_list.html'
     context_object_name = 'subjects'
     paginate_by = 20
 
 
-class SubjectCreateView(CreateView):
+class SubjectCreateView(AdminRequiredMixin, CreateView):
     model = Subject
     template_name = 'marks/subject_form.html'
     fields = ['name', 'code', 'subject_type', 'max_marks', 'pass_marks', 'classes']
     success_url = reverse_lazy('marks:subject_list')
 
 
-class SubjectUpdateView(UpdateView):
+class SubjectUpdateView(AdminRequiredMixin, UpdateView):
     model = Subject
     template_name = 'marks/subject_form.html'
     fields = ['name', 'code', 'subject_type', 'max_marks', 'pass_marks', 'classes']
     success_url = reverse_lazy('marks:subject_list')
 
 
-class SubjectDeleteView(DeleteView):
+class SubjectDeleteView(AdminRequiredMixin, DeleteView):
     model = Subject
     template_name = 'marks/subject_confirm_delete.html'
     success_url = reverse_lazy('marks:subject_list')
 
 
-class TeacherListView(ListView):
+class TeacherListView(AdminRequiredMixin, ListView):
     model = Teacher
     template_name = 'marks/teacher_list.html'
     context_object_name = 'teachers'
     paginate_by = 20
 
 
-class TeacherCreateView(CreateView):
+class TeacherCreateView(AdminRequiredMixin, CreateView):
     model = Teacher
     template_name = 'marks/teacher_form.html'
-    fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone', 'subjects', 'is_active']
+    fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone', 'subjects', 'assigned_classes', 'role', 'duties', 'is_active', 'approval_status']
     success_url = reverse_lazy('marks:teacher_list')
 
 
-class TeacherUpdateView(UpdateView):
+class TeacherUpdateView(AdminRequiredMixin, UpdateView):
     model = Teacher
     template_name = 'marks/teacher_form.html'
-    fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone', 'subjects', 'is_active']
+    fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone', 'subjects', 'assigned_classes', 'role', 'duties', 'is_active', 'approval_status']
     success_url = reverse_lazy('marks:teacher_list')
 
 
-class TeacherDeleteView(DeleteView):
+class TeacherDeleteView(AdminRequiredMixin, DeleteView):
     model = Teacher
     template_name = 'marks/teacher_confirm_delete.html'
     success_url = reverse_lazy('marks:teacher_list')
 
 
-class StudentListView(ListView):
+class StudentListView(AdminRequiredMixin, ListView):
     model = Student
     template_name = 'marks/student_list.html'
     context_object_name = 'students'
@@ -396,31 +613,31 @@ class StudentListView(ListView):
         return context
 
 
-class StudentCreateView(CreateView):
+class StudentCreateView(AdminRequiredMixin, CreateView):
     model = Student
     template_name = 'marks/student_form.html'
     fields = ['admission_number', 'roll_number', 'first_name', 'last_name', 'gender',
               'date_of_birth', 'student_class', 'father_name', 'mother_name',
-              'address', 'phone', 'email', 'admission_date', 'photo']
+              'address', 'phone', 'email', 'admission_date', 'photo', 'approval_status']
     success_url = reverse_lazy('marks:student_list')
 
 
-class StudentUpdateView(UpdateView):
+class StudentUpdateView(AdminRequiredMixin, UpdateView):
     model = Student
     template_name = 'marks/student_form.html'
     fields = ['admission_number', 'roll_number', 'first_name', 'last_name', 'gender',
               'date_of_birth', 'student_class', 'father_name', 'mother_name',
-              'address', 'phone', 'email', 'admission_date', 'photo', 'is_active']
+              'address', 'phone', 'email', 'admission_date', 'photo', 'is_active', 'approval_status']
     success_url = reverse_lazy('marks:student_list')
 
 
-class StudentDeleteView(DeleteView):
+class StudentDeleteView(AdminRequiredMixin, DeleteView):
     model = Student
     template_name = 'marks/student_confirm_delete.html'
     success_url = reverse_lazy('marks:student_list')
 
 
-class StudentDetailView(DetailView):
+class StudentDetailView(AdminRequiredMixin, DetailView):
     model = Student
     template_name = 'marks/student_detail.html'
     context_object_name = 'student'
@@ -432,7 +649,7 @@ class StudentDetailView(DetailView):
         return context
 
 
-class ExamListView(ListView):
+class ExamListView(AdminRequiredMixin, ListView):
     model = Exam
     template_name = 'marks/exam_list.html'
     context_object_name = 'exams'
@@ -451,27 +668,27 @@ class ExamListView(ListView):
         return context
 
 
-class ExamCreateView(CreateView):
+class ExamCreateView(AdminRequiredMixin, CreateView):
     model = Exam
     template_name = 'marks/exam_form.html'
     fields = ['name', 'exam_type', 'academic_year', 'classes', 'start_date', 'end_date', 'weightage']
     success_url = reverse_lazy('marks:exam_list')
 
 
-class ExamUpdateView(UpdateView):
+class ExamUpdateView(AdminRequiredMixin, UpdateView):
     model = Exam
     template_name = 'marks/exam_form.html'
     fields = ['name', 'exam_type', 'academic_year', 'classes', 'start_date', 'end_date', 'weightage', 'is_published']
     success_url = reverse_lazy('marks:exam_list')
 
 
-class ExamDeleteView(DeleteView):
+class ExamDeleteView(AdminRequiredMixin, DeleteView):
     model = Exam
     template_name = 'marks/exam_confirm_delete.html'
     success_url = reverse_lazy('marks:exam_list')
 
 
-class ExamDetailView(DetailView):
+class ExamDetailView(AdminRequiredMixin, DetailView):
     model = Exam
     template_name = 'marks/exam_detail.html'
     context_object_name = 'exam'
@@ -484,12 +701,17 @@ class ExamDetailView(DetailView):
 
 @login_required
 def marks_entry(request, exam_id, class_id):
-    if not request.user.is_staff and not _teacher_for(request):
-        return redirect('marks:portal_dashboard')
+    teacher = _teacher_for(request)
+    if not request.user.is_staff and (not teacher or not teacher.is_active or teacher.approval_status != 'approved'):
+        return redirect('marks:dashboard')
     exam = get_object_or_404(Exam, id=exam_id)
-    student_class = get_object_or_404(Class, id=class_id)
+    student_class = get_object_or_404(Class, id=class_id, exams=exam)
     students = student_class.students.filter(is_active=True)
     subjects = student_class.subjects.all()
+    if teacher and not request.user.is_staff:
+        if not _teacher_can_access_class(teacher, student_class):
+            return redirect('marks:dashboard')
+        subjects = _teacher_subjects_for_class(teacher, student_class)
 
     if request.method == 'POST':
         with transaction.atomic():
@@ -504,14 +726,22 @@ def marks_entry(request, exam_id, class_id):
                     remarks = request.POST.get(remarks_key, '')
 
                     if marks_value or is_absent:
-                        marks_obj, created = Marks.objects.update_or_create(
+                        try:
+                            numeric_value = Decimal(marks_value or '0')
+                        except InvalidOperation:
+                            messages.error(request, f'Invalid mark entered for {student.full_name}, {subject.name}.')
+                            return redirect('marks:marks_entry', exam_id=exam.id, class_id=student_class.id)
+                        if numeric_value < 0 or numeric_value > subject.max_marks:
+                            messages.error(request, f'Marks for {subject.name} must be between 0 and {subject.max_marks}.')
+                            return redirect('marks:marks_entry', exam_id=exam.id, class_id=student_class.id)
+                        Marks.objects.update_or_create(
                             student=student,
                             subject=subject,
                             exam=exam,
                             defaults={
-                                'marks_obtained': marks_value if marks_value and not is_absent else 0,
+                                'marks_obtained': numeric_value if not is_absent else 0,
                                 'is_absent': is_absent,
-                                'graded_by': request.user.teacher if hasattr(request.user, 'teacher') else None,
+                                'graded_by': teacher,
                                 'remarks': remarks,
                             }
                         )
@@ -520,6 +750,26 @@ def marks_entry(request, exam_id, class_id):
 
     existing_marks = Marks.objects.filter(exam=exam, student__in=students).select_related('student', 'subject')
     marks_dict = {(m.student_id, m.subject_id): m for m in existing_marks}
+    student_summaries = {}
+    for student in students:
+        student_marks = [marks_dict.get((student.id, subject.id)) for subject in subjects]
+        student_marks = [mark for mark in student_marks if mark]
+        total = sum((mark.marks_obtained for mark in student_marks if not mark.is_absent), Decimal('0'))
+        max_total = sum(subject.max_marks for subject in subjects)
+        student_summaries[student.id] = {
+            'total': total,
+            'max_total': max_total,
+            'percentage': round((float(total) / max_total) * 100, 2) if max_total else 0,
+            'complete': len(student_marks) == subjects.count(),
+        }
+    all_marks_complete = all(
+        summary['complete'] for summary in student_summaries.values()
+    ) if students.exists() and subjects.exists() else False
+    full_subjects = student_class.subjects.all()
+    all_class_marks_complete = all(
+        Marks.objects.filter(exam=exam, student=student, subject__in=full_subjects).count() == full_subjects.count()
+        for student in students
+    ) if students.exists() and full_subjects.exists() else False
 
     context = {
         'exam': exam,
@@ -527,19 +777,35 @@ def marks_entry(request, exam_id, class_id):
         'students': students,
         'subjects': subjects,
         'marks_dict': marks_dict,
+        'student_summaries': student_summaries,
+        'all_marks_complete': all_marks_complete,
+        'can_generate_report': (request.user.is_staff or bool(teacher)) and all_class_marks_complete,
     }
     return render(request, 'marks/marks_entry.html', context)
 
 
 @login_required
 def calculate_results(request, exam_id):
-    if not request.user.is_staff and not _teacher_for(request):
-        return redirect('marks:portal_dashboard')
+    teacher = _teacher_for(request)
+    if not request.user.is_staff and (not teacher or not teacher.is_active or teacher.approval_status != 'approved'):
+        return redirect('marks:dashboard')
     exam = get_object_or_404(Exam, id=exam_id)
+    target_classes = exam.classes.all()
+    if not request.user.is_staff:
+        target_classes = target_classes.filter(Q(class_teacher=teacher) | Q(subject_teachers=teacher)).distinct()
 
     if request.method == 'POST':
+        missing = []
+        for student_class in target_classes:
+            subjects = student_class.subjects.all()
+            for student in student_class.students.filter(is_active=True):
+                existing_subject_ids = set(Marks.objects.filter(student=student, exam=exam).values_list('subject_id', flat=True))
+                missing.extend(subject.name for subject in subjects if subject.id not in existing_subject_ids)
+        if missing:
+            messages.error(request, f'Cannot publish yet. {len(missing)} student subject marks are still missing.')
+            return redirect('marks:calculate_results', exam_id=exam.id)
         with transaction.atomic():
-            for student_class in exam.classes.all():
+            for student_class in target_classes:
                 students = student_class.students.filter(is_active=True)
                 for student in students:
                     marks = Marks.objects.filter(student=student, exam=exam)
@@ -551,13 +817,29 @@ def calculate_results(request, exam_id):
                         )
                         result.calculate_result()
 
-        exam.is_published = True
-        exam.save()
-        messages.success(request, 'Results calculated and published successfully!')
-        return redirect('marks:exam_detail', pk=exam.id)
+        if request.user.is_staff:
+            exam.is_published = True
+            exam.save()
+            messages.success(request, 'Results calculated and published successfully!')
+        else:
+            messages.success(request, 'Class reports generated successfully.')
+        return redirect('marks:dashboard')
 
     context = {'exam': exam}
     return render(request, 'marks/calculate_results.html', context)
+
+
+def _can_view_student(request, student):
+    if request.user.is_staff:
+        return True
+    own_student = _student_for(request)
+    if own_student and own_student.id == student.id:
+        return True
+    parent = _parent_for(request)
+    if parent and parent.students.filter(id=student.id).exists():
+        return True
+    teacher = _teacher_for(request)
+    return bool(teacher and _teacher_can_access_class(teacher, student.student_class))
 
 
 @login_required
@@ -587,6 +869,8 @@ def result_sheet(request, exam_id, class_id):
 @login_required
 def student_report_card(request, student_id, exam_id):
     student = get_object_or_404(Student, id=student_id)
+    if not _can_view_student(request, student):
+        return redirect('marks:dashboard')
     exam = get_object_or_404(Exam, id=exam_id)
     marks = Marks.objects.filter(student=student, exam=exam).select_related('subject')
     result = Result.objects.filter(student=student, exam=exam).first()
@@ -609,6 +893,9 @@ def student_report_card(request, student_id, exam_id):
 def export_marks_excel(request, exam_id, class_id):
     exam = get_object_or_404(Exam, id=exam_id)
     student_class = get_object_or_404(Class, id=class_id)
+    teacher = _teacher_for(request)
+    if not request.user.is_staff and (not teacher or not _teacher_can_access_class(teacher, student_class)):
+        return redirect('marks:dashboard')
     students = student_class.students.filter(is_active=True)
     subjects = student_class.subjects.all()
 
@@ -655,14 +942,18 @@ def export_marks_excel(request, exam_id, class_id):
         cell.alignment = center_align
         cell.border = thin_border
 
-    results = Result.objects.filter(exam=exam, student__in=students).select_related('student')
-    results = sorted(results, key=lambda x: float(x.percentage), reverse=True)
+    result_by_student = {result.student_id: result for result in Result.objects.filter(exam=exam, student__in=students)}
+    student_rows = []
+    for student in students:
+        marks_dict = {mark.subject_id: mark for mark in Marks.objects.filter(student=student, exam=exam)}
+        total = sum((mark.marks_obtained for mark in marks_dict.values() if not mark.is_absent), Decimal('0'))
+        max_total = sum(subject.max_marks for subject in subjects)
+        percentage = round((float(total) / max_total) * 100, 2) if max_total else 0
+        student_rows.append((student, marks_dict, result_by_student.get(student.id), total, max_total, percentage))
+    student_rows.sort(key=lambda row: row[5], reverse=True)
 
-    for idx, result in enumerate(results, 1):
+    for idx, (student, marks_dict, result, total, max_total, percentage) in enumerate(student_rows, 1):
         row += 1
-        student = result.student
-        marks = Marks.objects.filter(student=student, exam=exam).select_related('subject')
-        marks_dict = {m.subject_id: m for m in marks}
 
         ws.cell(row=row, column=1, value=student.roll_number).border = thin_border
         ws.cell(row=row, column=1).alignment = center_align
@@ -685,24 +976,24 @@ def export_marks_excel(request, exam_id, class_id):
             cell.alignment = center_align
             col += 1
 
-        ws.cell(row=row, column=col, value=float(result.total_marks)).border = thin_border
+        ws.cell(row=row, column=col, value=float(result.total_marks) if result else float(total)).border = thin_border
         ws.cell(row=row, column=col).alignment = center_align
         col += 1
-        ws.cell(row=row, column=col, value=result.max_total_marks).border = thin_border
+        ws.cell(row=row, column=col, value=result.max_total_marks if result else max_total).border = thin_border
         ws.cell(row=row, column=col).alignment = center_align
         col += 1
-        ws.cell(row=row, column=col, value=f"{result.percentage}%").border = thin_border
+        ws.cell(row=row, column=col, value=f"{result.percentage if result else percentage}%").border = thin_border
         ws.cell(row=row, column=col).alignment = center_align
         col += 1
-        ws.cell(row=row, column=col, value=result.grade).border = thin_border
+        ws.cell(row=row, column=col, value=result.grade if result else '-').border = thin_border
         ws.cell(row=row, column=col).alignment = center_align
         col += 1
-        ws.cell(row=row, column=col, value=result.rank).border = thin_border
+        ws.cell(row=row, column=col, value=result.rank if result else idx).border = thin_border
         ws.cell(row=row, column=col).alignment = center_align
 
-    for column_cells in ws.columns:
+    for column_index, column_cells in enumerate(ws.columns, 1):
         max_length = 0
-        column = column_cells[0].column_letter
+        column = openpyxl.utils.get_column_letter(column_index)
         for cell in column_cells:
             try:
                 if len(str(cell.value)) > max_length:
@@ -729,6 +1020,8 @@ def export_report_card_pdf(request, student_id, exam_id):
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     student = get_object_or_404(Student, id=student_id)
+    if not _can_view_student(request, student):
+        return redirect('marks:dashboard')
     exam = get_object_or_404(Exam, id=exam_id)
     marks = Marks.objects.filter(student=student, exam=exam).select_related('subject')
     result = Result.objects.filter(student=student, exam=exam).first()

@@ -1,6 +1,6 @@
 {% extends 'marks/base.html' %}
 
-{% block title %}Report Card: {{ student.full_name }} - {{ exam.name }} - JNV Ernakulam{% endblock %}
+{% block title %}JNV MarkFlow | Report Card: {{ student.full_name }} - {{ exam.name }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -153,12 +153,15 @@
 
 {% block content %}
 <div class="no-print mb-4 d-flex justify-content-between align-items-center">
-    <a href="{% url 'marks:student_detail' student.id %}" class="btn btn-outline-secondary">
+    <a href="{% url 'marks:dashboard' %}" class="btn btn-outline-secondary">
         <i class="fas fa-arrow-left me-2"></i>Back to Student
     </a>
     <button onclick="window.print()" class="btn btn-primary">
         <i class="fas fa-print me-2"></i>Print Report Card
     </button>
+    <a href="{% url 'marks:export_report_card_pdf' student.id exam.id %}" class="btn btn-success ms-2">
+        <i class="fas fa-file-pdf me-2"></i>Download PDF
+    </a>
 </div>
 
 <div class="report-card">

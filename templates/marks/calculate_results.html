@@ -1,6 +1,6 @@
 {% extends 'marks/base.html' %}
 
-{% block title %}Calculate Results: {{ exam.name }} - JNV Ernakulam{% endblock %}
+{% block title %}JNV MarkFlow | Calculate Results: {{ exam.name }}{% endblock %}
 
 {% block content %}
 <div class="page-header">
@@ -9,7 +9,7 @@
         <p class="text-muted mb-0">{{ exam.name }} - {{ exam.get_exam_type_display }}</p>
     </div>
     <div>
-        <a href="{% url 'marks:exam_detail' exam.id %}" class="btn btn-outline-secondary">
+        <a href="{% url 'marks:dashboard' %}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left me-2"></i>Back to Exam
         </a>
     </div>
@@ -24,8 +24,7 @@
             <div class="card-body">
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
-                    This will calculate results for all students in all classes assigned to this exam.
-                    Results will be computed based on marks entered for each subject.
+                    This will calculate the final percentage, grade, pass status, class rank, Excel result sheet, and student report cards.
                 </div>
                 
                 <h6 class="mb-3">Classes in this exam:</h6>
@@ -44,7 +43,7 @@
                 
                 <div class="alert alert-warning">
                     <i class="fas fa-exclamation-triangle me-2"></i>
-                    <strong>Note:</strong> This action will publish the exam results. Once published, results will be visible to students and parents.
+                    <strong>Note:</strong> This action publishes the examination after all subject marks are entered.
                     Make sure all marks have been entered before proceeding.
                 </div>
                 
@@ -54,7 +53,7 @@
                         <button type="submit" class="btn btn-success btn-lg">
                             <i class="fas fa-calculator me-2"></i>Calculate & Publish Results
                         </button>
-                        <a href="{% url 'marks:exam_detail' exam.id %}" class="btn btn-outline-secondary btn-lg">Cancel</a>
+                        <a href="{% url 'marks:dashboard' %}" class="btn btn-outline-secondary btn-lg">Cancel</a>
                     </div>
                 </form>
             </div>
