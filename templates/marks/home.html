@@ -12,13 +12,13 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --paper: #f5f3ee;
-            --ink: #17222d;
-            --muted: #69737b;
-            --blue: #2457a6;
-            --blue-deep: #163b78;
-            --coral: #e8755c;
-            --line: rgba(23, 34, 45, 0.12);
+            --paper: #eeece7;
+            --ink: #202020;
+            --muted: #6d6b67;
+            --blue: #202020;
+            --blue-deep: #202020;
+            --coral: #202020;
+            --line: rgba(32, 32, 32, 0.16);
         }
 
         * { box-sizing: border-box; }
@@ -37,9 +37,7 @@
             inset: 0;
             z-index: -2;
             content: '';
-            background:
-                radial-gradient(circle at 86% 10%, rgba(232, 117, 92, 0.2), transparent 25rem),
-                radial-gradient(circle at 8% 88%, rgba(36, 87, 166, 0.14), transparent 28rem);
+            background: transparent;
         }
 
         body::after {
@@ -47,11 +45,11 @@
             inset: 0;
             z-index: -1;
             pointer-events: none;
-            opacity: 0.34;
+            opacity: 0.16;
             content: '';
-            background-image: radial-gradient(rgba(23, 34, 45, 0.18) 0.7px, transparent 0.7px);
-            background-size: 18px 18px;
-            mask-image: linear-gradient(to bottom, black, transparent 75%);
+            background-image: radial-gradient(rgba(32, 32, 32, 0.22) 0.7px, transparent 0.7px);
+            background-size: 22px 22px;
+            mask-image: linear-gradient(to bottom, black 20%, transparent 78%);
         }
 
         .home-shell {
@@ -433,6 +431,65 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
         }
+
+        .home-shell {
+            width: min(1200px, calc(100% - 64px));
+            padding: 30px 0 42px;
+        }
+
+        .topbar { animation: none; }
+        .brand-mark { background: var(--ink); box-shadow: none; }
+        .login-trigger { border-radius: 999px; background: var(--ink); color: #fff; box-shadow: none; }
+        .login-trigger:hover, .login-trigger:focus-visible, .login-wrap.is-open .login-trigger { background: #000; }
+        .role-menu { border-radius: 4px; background: var(--paper); box-shadow: 0 16px 36px rgba(32, 32, 32, 0.14); }
+        .role-link { border-radius: 4px; }
+        .role-link:hover, .role-link:focus-visible { color: var(--ink); background: rgba(32, 32, 32, 0.08); }
+        .role-icon { color: var(--ink); border-radius: 4px; background: rgba(32, 32, 32, 0.08); }
+        .hero {
+            min-height: calc(100vh - 72px);
+            grid-template-columns: minmax(0, 1fr) minmax(320px, 0.92fr);
+            align-items: end;
+            gap: 8vw;
+            padding: 30px 0 32px;
+        }
+        .hero-copy { max-width: 700px; padding-bottom: 14px; }
+        .eyebrow { margin-bottom: 28px; color: var(--ink); letter-spacing: 0; text-transform: none; }
+        .eyebrow::before { display: none; }
+        h1 { max-width: 680px; font-family: 'DM Sans', sans-serif; font-size: clamp(2.8rem, 5.1vw, 5rem); font-weight: 400; letter-spacing: -0.02em; line-height: 1.08; }
+        h1 em { color: var(--ink); }
+        .hero-copy > p { max-width: 620px; margin-top: 26px; color: var(--muted); font-size: 1rem; line-height: 1.6; }
+        .hero-actions { margin-top: 34px; }
+        .primary-link { min-height: 56px; padding: 0 28px; border-radius: 999px; color: #fff; background: var(--ink); box-shadow: none; }
+        .primary-link:hover { background: #000; box-shadow: none; }
+        .welcome-note { margin-top: 28px; color: var(--muted); font-size: 0.8rem; }
+        .dot-field { position: relative; min-height: 590px; overflow: hidden; }
+        .dot { position: absolute; display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--ink); animation: dot-drift 5s ease-in-out infinite; }
+        .dot:nth-child(3n) { width: 12px; height: 12px; }
+        .dot:nth-child(5n) { width: 28px; height: 28px; }
+        .dot-1 { top: 8%; left: 58%; }.dot-2 { top: 17%; left: 78%; }.dot-3 { top: 22%; left: 91%; }
+        .dot-4 { top: 38%; left: 46%; }.dot-5 { top: 41%; left: 70%; }.dot-6 { top: 47%; left: 88%; }
+        .dot-7 { top: 58%; left: 62%; }.dot-8 { top: 64%; left: 79%; }.dot-9 { top: 69%; left: 95%; }
+        .dot-10 { top: 78%; left: 42%; }.dot-11 { top: 82%; left: 60%; }.dot-12 { top: 87%; left: 75%; }
+        .dot-13 { top: 91%; left: 91%; }.dot-14 { top: 31%; left: 98%; }.dot-15 { top: 73%; left: 52%; }
+        @keyframes dot-drift { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-7px, 8px); } }
+
+        @media (max-width: 800px) {
+            .home-shell { width: min(100% - 32px, 580px); }
+            .hero { min-height: auto; grid-template-columns: 1fr; align-items: stretch; gap: 12px; padding-top: 78px; }
+            .hero-copy { padding-bottom: 0; }
+            .dot-field { min-height: 360px; margin-top: -10px; }
+            .hero-copy > p { margin-right: 0; margin-left: 0; }
+            .hero-actions { justify-content: flex-start; }
+            .welcome-note { justify-content: flex-start; }
+        }
+
+        @media (max-width: 460px) {
+            .home-shell { width: calc(100% - 28px); padding-top: 18px; }
+            .brand span { max-width: 130px; line-height: 1.1; }
+            .hero { padding-top: 68px; }
+            h1 { font-size: clamp(2.55rem, 12vw, 3.7rem); }
+            .dot-field { min-height: 280px; }
+        }
     </style>
 </head>
 <body>
@@ -460,34 +517,21 @@
 
         <section class="hero" aria-labelledby="welcome-title">
             <div class="hero-copy">
-                <p class="eyebrow"><span id="greetingTime">A warm welcome</span></p>
-                <h1 id="welcome-title">Jawahar Navodaya<br><em>Vidyalaya, Ernakulam.</em></h1>
-                <p>PM SHRI Jawahar Navodaya Vidyalaya, Ernakulam is a fully residential, co-educational CBSE school for Classes VI-XII at Neriamangalam.</p>
+                <p class="eyebrow">About us</p>
+                <h1 id="welcome-title">A fully residential school for learning, living, and growing at Ernakulam.</h1>
+                <p>Jawahar Navodaya Vidyalaya, Ernakulam is a PM SHRI, co-educational CBSE school for Classes VI-XII at Neriamangalam.</p>
                 <div class="hero-actions">
-                    <a class="primary-link" href="#loginMenu" data-open-login>Enter the portal <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-                    <a class="quiet-link" href="{% url 'admin:login' %}?next={% url 'marks:portal_dashboard' %}">View dashboard <i class="fa-solid fa-arrow-right"></i></a>
+                    <a class="primary-link" href="#loginMenu" data-open-login>Enter the portal <i class="fa-solid fa-arrow-right"></i></a>
                 </div>
-                <div class="welcome-note"><span class="pulse-dot"></span><span>प्रज्ञानं ब्रह्म · Prajnanam Brahma · Pure Knowledge is Brahma</span></div>
+                <div class="welcome-note"><span>प्रज्ञानं ब्रह्म · Prajnanam Brahma · Pure Knowledge is Brahma</span></div>
             </div>
 
-            <div class="phone-stage" aria-label="A preview of the JNV welcome experience">
-                <div class="floating-label label-one"><i class="fa-solid fa-sparkles"></i> Your school, in one place</div>
-                <div class="floating-label label-two"><i class="fa-solid fa-heart"></i> Made for every learner</div>
-                <div class="phone">
-                    <div class="phone-screen">
-                        <span class="phone-island"></span>
-                        <div class="phone-topline"><span>9:41</span><span><i class="fa-solid fa-signal"></i>&nbsp; <i class="fa-solid fa-wifi"></i>&nbsp; <i class="fa-solid fa-battery-three-quarters"></i></span></div>
-                        <div class="hello-card">
-                            <small id="phoneGreeting">Good day</small>
-                            <h2>Hello.</h2>
-                            <p>Learning and living together at Neriamangalam, Ernakulam.</p>
-                        </div>
-                        <div class="phone-bottom">
-                            <small>JNV Ernakulam · Classes VI-XII</small>
-                            <div class="phone-stat"><span>प्रज्ञानं ब्रह्म</span><b><i class="fa-solid fa-arrow-up-right"></i></b></div>
-                        </div>
-                    </div>
-                </div>
+            <div class="dot-field" aria-hidden="true">
+                <span class="dot dot-1"></span><span class="dot dot-2"></span><span class="dot dot-3"></span>
+                <span class="dot dot-4"></span><span class="dot dot-5"></span><span class="dot dot-6"></span>
+                <span class="dot dot-7"></span><span class="dot dot-8"></span><span class="dot dot-9"></span>
+                <span class="dot dot-10"></span><span class="dot dot-11"></span><span class="dot dot-12"></span>
+                <span class="dot dot-13"></span><span class="dot dot-14"></span><span class="dot dot-15"></span>
             </div>
         </section>
     </main>
@@ -497,14 +541,6 @@
             const loginMenu = document.getElementById('loginMenu');
             const loginTrigger = loginMenu.querySelector('.login-trigger');
             const openLogin = document.querySelector('[data-open-login]');
-            const greetingTime = document.getElementById('greetingTime');
-            const phoneGreeting = document.getElementById('phoneGreeting');
-            const hour = new Date().getHours();
-            const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-
-            greetingTime.textContent = greeting + ', welcome';
-            phoneGreeting.textContent = greeting;
-
             loginTrigger.addEventListener('click', () => {
                 const isOpen = loginMenu.classList.toggle('is-open');
                 loginTrigger.setAttribute('aria-expanded', String(isOpen));
