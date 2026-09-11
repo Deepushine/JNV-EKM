@@ -247,20 +247,20 @@ class AcademicYearCreateView(CreateView):
     model = AcademicYear
     template_name = 'marks/academic_year_form.html'
     fields = ['name', 'start_date', 'end_date', 'is_active']
-    success_url = reverse_lazy('academic_year_list')
+    success_url = reverse_lazy('marks:academic_year_list')
 
 
 class AcademicYearUpdateView(UpdateView):
     model = AcademicYear
     template_name = 'marks/academic_year_form.html'
     fields = ['name', 'start_date', 'end_date', 'is_active']
-    success_url = reverse_lazy('academic_year_list')
+    success_url = reverse_lazy('marks:academic_year_list')
 
 
 class AcademicYearDeleteView(DeleteView):
     model = AcademicYear
     template_name = 'marks/academic_year_confirm_delete.html'
-    success_url = reverse_lazy('academic_year_list')
+    success_url = reverse_lazy('marks:academic_year_list')
 
 
 class ClassListView(ListView):
@@ -286,14 +286,20 @@ class ClassCreateView(CreateView):
     model = Class
     template_name = 'marks/class_form.html'
     fields = ['name', 'section', 'academic_year', 'class_teacher']
-    success_url = reverse_lazy('class_list')
+    success_url = reverse_lazy('marks:class_list')
 
 
 class ClassUpdateView(UpdateView):
     model = Class
     template_name = 'marks/class_form.html'
     fields = ['name', 'section', 'academic_year', 'class_teacher']
-    success_url = reverse_lazy('class_list')
+    success_url = reverse_lazy('marks:class_list')
+
+
+class ClassDeleteView(DeleteView):
+    model = Class
+    template_name = 'marks/class_confirm_delete.html'
+    success_url = reverse_lazy('marks:class_list')
 
 
 class ClassDetailView(DetailView):
@@ -320,14 +326,20 @@ class SubjectCreateView(CreateView):
     model = Subject
     template_name = 'marks/subject_form.html'
     fields = ['name', 'code', 'subject_type', 'max_marks', 'pass_marks', 'classes']
-    success_url = reverse_lazy('subject_list')
+    success_url = reverse_lazy('marks:subject_list')
 
 
 class SubjectUpdateView(UpdateView):
     model = Subject
     template_name = 'marks/subject_form.html'
     fields = ['name', 'code', 'subject_type', 'max_marks', 'pass_marks', 'classes']
-    success_url = reverse_lazy('subject_list')
+    success_url = reverse_lazy('marks:subject_list')
+
+
+class SubjectDeleteView(DeleteView):
+    model = Subject
+    template_name = 'marks/subject_confirm_delete.html'
+    success_url = reverse_lazy('marks:subject_list')
 
 
 class TeacherListView(ListView):
@@ -341,14 +353,20 @@ class TeacherCreateView(CreateView):
     model = Teacher
     template_name = 'marks/teacher_form.html'
     fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone', 'subjects', 'is_active']
-    success_url = reverse_lazy('teacher_list')
+    success_url = reverse_lazy('marks:teacher_list')
 
 
 class TeacherUpdateView(UpdateView):
     model = Teacher
     template_name = 'marks/teacher_form.html'
     fields = ['employee_id', 'first_name', 'last_name', 'email', 'phone', 'subjects', 'is_active']
-    success_url = reverse_lazy('teacher_list')
+    success_url = reverse_lazy('marks:teacher_list')
+
+
+class TeacherDeleteView(DeleteView):
+    model = Teacher
+    template_name = 'marks/teacher_confirm_delete.html'
+    success_url = reverse_lazy('marks:teacher_list')
 
 
 class StudentListView(ListView):
@@ -384,7 +402,7 @@ class StudentCreateView(CreateView):
     fields = ['admission_number', 'roll_number', 'first_name', 'last_name', 'gender',
               'date_of_birth', 'student_class', 'father_name', 'mother_name',
               'address', 'phone', 'email', 'admission_date', 'photo']
-    success_url = reverse_lazy('student_list')
+    success_url = reverse_lazy('marks:student_list')
 
 
 class StudentUpdateView(UpdateView):
@@ -393,7 +411,13 @@ class StudentUpdateView(UpdateView):
     fields = ['admission_number', 'roll_number', 'first_name', 'last_name', 'gender',
               'date_of_birth', 'student_class', 'father_name', 'mother_name',
               'address', 'phone', 'email', 'admission_date', 'photo', 'is_active']
-    success_url = reverse_lazy('student_list')
+    success_url = reverse_lazy('marks:student_list')
+
+
+class StudentDeleteView(DeleteView):
+    model = Student
+    template_name = 'marks/student_confirm_delete.html'
+    success_url = reverse_lazy('marks:student_list')
 
 
 class StudentDetailView(DetailView):
@@ -431,14 +455,20 @@ class ExamCreateView(CreateView):
     model = Exam
     template_name = 'marks/exam_form.html'
     fields = ['name', 'exam_type', 'academic_year', 'classes', 'start_date', 'end_date', 'weightage']
-    success_url = reverse_lazy('exam_list')
+    success_url = reverse_lazy('marks:exam_list')
 
 
 class ExamUpdateView(UpdateView):
     model = Exam
     template_name = 'marks/exam_form.html'
     fields = ['name', 'exam_type', 'academic_year', 'classes', 'start_date', 'end_date', 'weightage', 'is_published']
-    success_url = reverse_lazy('exam_list')
+    success_url = reverse_lazy('marks:exam_list')
+
+
+class ExamDeleteView(DeleteView):
+    model = Exam
+    template_name = 'marks/exam_confirm_delete.html'
+    success_url = reverse_lazy('marks:exam_list')
 
 
 class ExamDetailView(DetailView):
@@ -486,7 +516,7 @@ def marks_entry(request, exam_id, class_id):
                             }
                         )
         messages.success(request, 'Marks saved successfully!')
-        return redirect('marks_entry', exam_id=exam.id, class_id=student_class.id)
+        return redirect('marks:marks_entry', exam_id=exam.id, class_id=student_class.id)
 
     existing_marks = Marks.objects.filter(exam=exam, student__in=students).select_related('student', 'subject')
     marks_dict = {(m.student_id, m.subject_id): m for m in existing_marks}
@@ -524,7 +554,7 @@ def calculate_results(request, exam_id):
         exam.is_published = True
         exam.save()
         messages.success(request, 'Results calculated and published successfully!')
-        return redirect('exam_detail', pk=exam.id)
+        return redirect('marks:exam_detail', pk=exam.id)
 
     context = {'exam': exam}
     return render(request, 'marks/calculate_results.html', context)
@@ -692,7 +722,95 @@ def export_marks_excel(request, exam_id, class_id):
 
 @login_required
 def export_report_card_pdf(request, student_id, exam_id):
-    pass
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    student = get_object_or_404(Student, id=student_id)
+    exam = get_object_or_404(Exam, id=exam_id)
+    marks = Marks.objects.filter(student=student, exam=exam).select_related('subject')
+    result = Result.objects.filter(student=student, exam=exam).first()
+    if not result:
+        result = Result(student=student, exam=exam)
+        result.calculate_result()
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = (
+        f'attachment; filename="{student.admission_number}_{exam.name}_report_card.pdf"'
+    )
+
+    doc = SimpleDocTemplate(
+        response,
+        pagesize=A4,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+        leftMargin=18 * mm,
+        rightMargin=18 * mm,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'SchoolTitle', parent=styles['Title'], fontSize=16, spaceAfter=2,
+    )
+    sub_style = ParagraphStyle(
+        'SchoolSub', parent=styles['Normal'], alignment=1,
+        textColor=colors.HexColor('#475569'), spaceAfter=10,
+    )
+
+    story = [
+        Paragraph('Jawahar Navodaya Vidyalaya, Ernakulam', title_style),
+        Paragraph(
+            'PM SHRI School &middot; Neriamangalam, Ernakulam Dt., Kerala &middot; CBSE Affiliated',
+            sub_style,
+        ),
+        Paragraph(
+            f'Report Card &mdash; {exam.name} ({exam.get_exam_type_display()})',
+            styles['Heading2'],
+        ),
+        Spacer(1, 6),
+        Paragraph(
+            f'<b>Name:</b> {student.full_name} &nbsp;&nbsp; '
+            f'<b>Admission No:</b> {student.admission_number} &nbsp;&nbsp; '
+            f'<b>Class:</b> {student.student_class} &nbsp;&nbsp; '
+            f'<b>Roll No:</b> {student.roll_number}',
+            styles['Normal'],
+        ),
+        Spacer(1, 14),
+    ]
+
+    table_data = [['Subject', 'Max Marks', 'Marks Obtained', 'Grade']]
+    for mark in marks:
+        table_data.append([
+            mark.subject.name,
+            str(mark.subject.max_marks),
+            'AB' if mark.is_absent else str(mark.marks_obtained),
+            '-' if mark.is_absent else mark.grade,
+        ])
+    table_data.append(['Total', str(result.max_total_marks), str(result.total_marks), result.grade])
+
+    table = Table(table_data, colWidths=[70 * mm, 35 * mm, 40 * mm, 25 * mm])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e3a8a')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f1f5f9')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8fafc')]),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 14))
+    story.append(Paragraph(
+        f'<b>Percentage:</b> {result.percentage}% &nbsp;&nbsp; '
+        f'<b>Result:</b> {"PASS" if result.is_pass else "FAIL"} &nbsp;&nbsp; '
+        f'<b>Rank:</b> {result.rank or "-"}',
+        styles['Normal'],
+    ))
+
+    doc.build(story)
+    return response
 
 
 @login_required

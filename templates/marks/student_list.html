@@ -97,6 +97,9 @@
                                 <a href="{% url 'marks:student_update' student.id %}" class="btn btn-outline-secondary" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
+                                <a href="{% url 'marks:student_delete' student.id %}" class="btn btn-outline-danger" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </a>
                             </div>
                         </td>
                     </tr>

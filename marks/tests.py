@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import AcademicYear, Class, ParentProfile, PerformanceShare, Student, Teacher
+from .models import AcademicYear, Class, Exam, Marks, ParentProfile, PerformanceShare, Student, Subject, Teacher
 
 
 class PortalAccessTests(TestCase):
@@ -36,7 +36,7 @@ class PortalAccessTests(TestCase):
 	def test_home_is_public(self):
 		response = self.client.get(reverse('marks:home'))
 		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, 'Hello,')
+		self.assertContains(response, 'Jawahar Navodaya')
 
 	def test_teacher_portal_loads(self):
 		self.client.login(username='teacher-test', password='test-pass')
@@ -56,3 +56,26 @@ class PortalAccessTests(TestCase):
 		response = self.client.get(reverse('marks:shared_performance', args=[self.share.token]))
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, self.student.full_name)
+
+	def test_delete_routes_share_creation_and_pdf_export(self):
+		for route_name in ('class_delete', 'subject_delete', 'teacher_delete', 'student_delete', 'exam_delete'):
+			self.assertTrue(reverse(f'marks:{route_name}', args=[1]))
+
+		self.client.login(username='teacher-test', password='test-pass')
+		share_response = self.client.get(reverse('marks:create_performance_share', args=[self.student.id]))
+		self.assertEqual(share_response.status_code, 200)
+		self.assertContains(share_response, 'Performance link ready')
+
+		subject = Subject.objects.create(name='Mathematics', code='TEST-MATH')
+		subject.classes.add(self.student.student_class)
+		exam = Exam.objects.create(
+			name='Unit Test', exam_type='unit_test', academic_year=self.student.student_class.academic_year,
+			start_date=date(2026, 7, 1), end_date=date(2026, 7, 2),
+		)
+		exam.classes.add(self.student.student_class)
+		Marks.objects.create(student=self.student, subject=subject, exam=exam, marks_obtained=85)
+
+		pdf_response = self.client.get(reverse('marks:export_report_card_pdf', args=[self.student.id, exam.id]))
+		self.assertEqual(pdf_response.status_code, 200)
+		self.assertEqual(pdf_response['Content-Type'], 'application/pdf')
+		self.assertTrue(pdf_response.content.startswith(b'%PDF'))
